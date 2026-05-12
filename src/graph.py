@@ -135,7 +135,7 @@ class DirectedGraph:
             while stack:
                 node, path = stack.pop()
                 if len(path) > max_len + 1:
-                    return True
+                    continue
                 for child in self.get_children(node):
                     if child == start and len(path) > max_len:
                         return True
