@@ -1,0 +1,222 @@
+"""多目标贝叶斯网络结构学习 — CLI 入口。
+
+使用 MOEA/D + 切比雪夫分解，优化 MDL 评分和结构对称差。
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import pickle
+import sys
+
+import numpy as np
+
+from src.config import MOEADConfig
+from src.moead import MOEAD
+from src.prior import PriorNetwork
+from src.visualize import (
+    plot_convergence,
+    plot_objective_convergence,
+    plot_pareto_front,
+    plot_network,
+)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="MOEA/D 多目标贝叶斯网络结构学习"
+    )
+
+    # 先验网络
+    parser.add_argument(
+        "--model", type=str, default="asia",
+        help="bnlearn 网络名 (默认: asia)",
+    )
+    parser.add_argument(
+        "--bif", type=str, default=None,
+        help="BIF 文件路径 (优先级高于 --model)",
+    )
+
+    # 数据
+    parser.add_argument(
+        "--n-samples", type=int, default=500,
+        help="合成数据样本数 (默认: 500)",
+    )
+    parser.add_argument(
+        "--data-file", type=str, default=None,
+        help="外部数据文件路径 (.npy 格式)",
+    )
+
+    # MOEA/D 参数
+    parser.add_argument(
+        "--max-cycle", type=int, default=3, choices=[2, 3, 4],
+        help="最大允许环长度 (默认: 3)",
+    )
+    parser.add_argument(
+        "--max-sdiff", type=int, default=15,
+        help="结构对称差上限 (默认: 15)",
+    )
+    parser.add_argument(
+        "--pop-size", type=int, default=50,
+        help="种群大小 / 权重向量数 (默认: 50)",
+    )
+    parser.add_argument(
+        "--neighbors", type=int, default=10,
+        help="邻居数量 T (默认: 10)",
+    )
+    parser.add_argument(
+        "--generations", type=int, default=200,
+        help="最大世代数 (默认: 200)",
+    )
+    parser.add_argument(
+        "--prob-neighbor", type=float, default=0.9,
+        help="从邻居选父代的概率 δ (默认: 0.9)",
+    )
+    parser.add_argument(
+        "--max-replace", type=int, default=2,
+        help="每个子代最多替换邻居数 nr (默认: 2)",
+    )
+    parser.add_argument(
+        "--mutation-prob", type=float, default=0.3,
+        help="变异概率 (默认: 0.3)",
+    )
+
+    # 输出
+    parser.add_argument(
+        "--output", type=str, default="./output",
+        help="输出目录 (默认: ./output)",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42,
+        help="随机种子 (默认: 42)",
+    )
+    parser.add_argument(
+        "--no-plot", action="store_true",
+        help="跳过可视化",
+    )
+
+    args = parser.parse_args()
+
+    # 创建输出目录
+    os.makedirs(args.output, exist_ok=True)
+
+    # ── 1. 加载先验网络 ──────────────────────────────────────
+    print(f"[1/5] 加载先验网络...")
+    if args.bif:
+        prior_graph, node_names, n_states = PriorNetwork.from_bif(
+            args.bif, max_cycle_length=args.max_cycle
+        )
+    else:
+        prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(
+            args.model, max_cycle_length=args.max_cycle
+        )
+    print(f"  网络: {args.model}, 节点: {len(node_names)}, "
+          f"边: {len(prior_graph.get_edges())}")
+
+    # ── 2. 准备数据 ──────────────────────────────────────────
+    print(f"[2/5] 准备数据...")
+    if args.data_file:
+        data = np.load(args.data_file).astype(np.int32)
+        print(f"  从文件加载: {data.shape}")
+    else:
+        data, _, _ = PriorNetwork.generate_data(
+            args.model, n_samples=args.n_samples, seed=args.seed
+        )
+        print(f"  合成数据: {data.shape}, 样本数: {args.n_samples}")
+
+    # ── 3. 配置 MOEA/D ───────────────────────────────────────
+    print(f"[3/5] 配置 MOEA/D...")
+    config = MOEADConfig(
+        n_nodes=len(node_names),
+        n_states=n_states,
+        max_cycle_length=args.max_cycle,
+        max_symmetric_diff=args.max_sdiff,
+        n_weight_vectors=args.pop_size,
+        n_neighbors=args.neighbors,
+        n_generations=args.generations,
+        prob_neighbor_mating=args.prob_neighbor,
+        max_replacements=args.max_replace,
+        mutation_prob=args.mutation_prob,
+        data=data,
+        output_dir=args.output,
+        random_seed=args.seed,
+    )
+    print(f"  种群: {args.pop_size}, 世代: {args.generations}, "
+          f"邻居: {args.neighbors}")
+
+    # ── 4. 运行 MOEA/D ───────────────────────────────────────
+    print(f"[4/5] 运行 MOEA/D...")
+    moead = MOEAD(config, prior_graph, data, node_names)
+    result = moead.run()
+
+    print(f"  完成! 耗时: {result.runtime:.1f}s")
+    print(f"  Pareto 前沿解数: {len(result.pareto_graphs)}")
+    print(f"  Ideal point: MDL={result.ideal[0]:.2f}, Sdiff={result.ideal[1]:.0f}")
+
+    # 打印 Pareto 前沿
+    print(f"\n  Pareto 前沿:")
+    print(f"  {'#':>3}  {'Edges':>5}  {'MDL':>12}  {'Sdiff':>5}")
+    print(f"  {'-' * 32}")
+    for i, (g, f) in enumerate(zip(result.pareto_graphs, result.pareto_f)):
+        print(f"  {i:>3}  {len(g.get_edges()):>5}  {f[0]:>12.2f}  {f[1]:>5.0f}")
+
+    # ── 5. 保存结果和可视化 ──────────────────────────────────
+    print(f"\n[5/5] 保存结果...")
+
+    # 保存结果对象
+    result_path = os.path.join(args.output, "result.pkl")
+    with open(result_path, "wb") as f:
+        pickle.dump(result, f)
+    print(f"  结果: {result_path}")
+
+    # 保存 Pareto 前沿（文本格式）
+    pareto_path = os.path.join(args.output, "pareto_front.csv")
+    with open(pareto_path, "w") as f:
+        f.write("index,edges,mdl,sdiff\n")
+        for i, (g, fv) in enumerate(zip(result.pareto_graphs, result.pareto_f)):
+            f.write(f"{i},{len(g.get_edges())},{fv[0]:.4f},{fv[1]:.0f}\n")
+    print(f"  Pareto CSV: {pareto_path}")
+
+    # 保存最优图（BIF 格式）
+    if result.pareto_graphs:
+        # 保存 Sdiff=0 的解（最接近先验的 Pareto 最优解）
+        zero_sdiff_idx = None
+        for i, fv in enumerate(result.pareto_f):
+            if fv[1] == 0:
+                zero_sdiff_idx = i
+                break
+        if zero_sdiff_idx is not None:
+            bif_path = os.path.join(args.output, "best_graph.bif")
+            _save_bif(result.pareto_graphs[zero_sdiff_idx],
+                       node_names, n_states, bif_path)
+
+    # 可视化
+    if not args.no_plot:
+        print(f"  生成图表...")
+        pareto_plot = os.path.join(args.output, "pareto_front.png")
+        plot_pareto_front(result, save_path=pareto_plot)
+
+        conv_plot = os.path.join(args.output, "convergence.png")
+        plot_convergence(result, save_path=conv_plot)
+
+        obj_conv_plot = os.path.join(args.output, "objective_convergence.png")
+        plot_objective_convergence(result, save_path=obj_conv_plot)
+
+    print(f"\n  全部完成! 输出目录: {args.output}")
+
+
+def _save_bif(graph, node_names: list[str], n_states: list[int],
+              path: str) -> None:
+    """将图保存为简化 BIF 格式（仅结构，不含概率表）。"""
+    with open(path, "w") as f:
+        f.write(f"network unknown {{\n}}\n")
+        for i, name in enumerate(node_names):
+            states_str = ", ".join(f"state{j}" for j in range(n_states[i]))
+            f.write(f"variable {name} {{\n  type discrete [{n_states[i]}] {{ {states_str} }};\n}}\n")
+        for name in node_names:
+            f.write(f"probability ({name}) {{\n  table 1.0;\n}}\n")
+
+
+if __name__ == "__main__":
+    main()
