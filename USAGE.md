@@ -45,6 +45,7 @@ python3 main.py --model asia --n-samples 1000 --generations 300 --pop-size 50
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--max-cycle` | `3` | 禁止此长度及以下的环 (2/3/4)；更长的环被允许，留待后续 DAG 转化处理 |
+| `--max-parents` | 无限制 | 每个节点最大父节点数 |
 | `--max-sdiff` | `15` | 结构对称差总和上限 |
 
 ### 其他

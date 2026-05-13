@@ -54,6 +54,10 @@ def main():
         help="禁止此长度及以下的环，允许更长的环 (默认: 3)",
     )
     parser.add_argument(
+        "--max-parents", type=int, default=None,
+        help="每个节点最大父节点数 (默认: 不限制)",
+    )
+    parser.add_argument(
         "--max-sdiff", type=int, default=15,
         help="结构对称差上限 (默认: 15)",
     )
@@ -131,6 +135,7 @@ def main():
         n_nodes=len(node_names),
         n_states=n_states,
         max_forbidden_cycle=args.max_cycle,
+        max_parents=args.max_parents,
         max_symmetric_diff=args.max_sdiff,
         n_weight_vectors=args.pop_size,
         n_neighbors=args.neighbors,

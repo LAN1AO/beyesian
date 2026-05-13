@@ -8,10 +8,12 @@ class DirectedGraph:
 
     禁止长度 ≤ max_forbidden_cycle 的短环（易检测），允许更长的环。
     例如 n=3 时: 禁止 2-环和 3-环，允许 4+ 环（留待后续 DAG 转化处理）。
+    可选限制每个节点的最大父节点数 max_parents。
     使用 numpy 邻接矩阵 (n×n, int8) 存储图结构。
     """
 
-    def __init__(self, n_nodes: int, max_forbidden_cycle: int = 3):
+    def __init__(self, n_nodes: int, max_forbidden_cycle: int = 3,
+                 max_parents: int | None = None):
         if max_forbidden_cycle not in (2, 3, 4):
             raise ValueError(
                 f"max_forbidden_cycle 必须为 2, 3, 或 4, "
@@ -19,15 +21,17 @@ class DirectedGraph:
             )
         self.n_nodes = n_nodes
         self.max_forbidden_cycle = max_forbidden_cycle
+        self.max_parents = max_parents
         self.adj = np.zeros((n_nodes, n_nodes), dtype=np.int8)
 
     # ── 工厂方法 ──────────────────────────────────────────────
 
     @classmethod
     def from_edges(
-        cls, n_nodes: int, edges: list[tuple[int, int]], max_forbidden_cycle: int = 3
+        cls, n_nodes: int, edges: list[tuple[int, int]], max_forbidden_cycle: int = 3,
+        max_parents: int | None = None,
     ) -> DirectedGraph:
-        g = cls(n_nodes, max_forbidden_cycle)
+        g = cls(n_nodes, max_forbidden_cycle, max_parents=max_parents)
         for u, v in edges:
             if not g.add_edge(u, v):
                 raise ValueError(
@@ -37,28 +41,32 @@ class DirectedGraph:
 
     @classmethod
     def from_adj_matrix(
-        cls, adj: np.ndarray, max_forbidden_cycle: int = 3
+        cls, adj: np.ndarray, max_forbidden_cycle: int = 3,
+        max_parents: int | None = None,
     ) -> DirectedGraph:
         n = adj.shape[0]
-        g = cls(n, max_forbidden_cycle)
+        g = cls(n, max_forbidden_cycle, max_parents=max_parents)
         g.adj = adj.astype(np.int8).copy()
         if not g._is_valid():
             raise ValueError("邻接矩阵存在被禁的短环")
         return g
 
     def copy(self) -> DirectedGraph:
-        g = DirectedGraph(self.n_nodes, self.max_forbidden_cycle)
+        g = DirectedGraph(self.n_nodes, self.max_forbidden_cycle,
+                          max_parents=self.max_parents)
         g.adj = self.adj.copy()
         return g
 
     # ── 边操作 (全部带环检测) ────────────────────────────────
 
     def add_edge(self, u: int, v: int) -> bool:
-        """尝试添加边 u→v，若产生被禁短环（≤ max_forbidden_cycle）则返回 False。"""
+        """尝试添加边 u→v，若产生被禁短环或超过最大父节点数则返回 False。"""
         if u == v:
             return False  # 禁止自环
         if self.adj[u, v]:
             return True  # 边已存在
+        if self.max_parents is not None and self.get_in_degree(v) >= self.max_parents:
+            return False
         cycle_len = self._would_create_cycle(u, v)
         if cycle_len is not None and cycle_len <= self.max_forbidden_cycle:
             return False
@@ -178,9 +186,10 @@ class DirectedGraph:
 
     def __repr__(self) -> str:
         n_edges = int(np.sum(self.adj))
+        mp = f", max_parents={self.max_parents}" if self.max_parents else ""
         return (
             f"DirectedGraph(n={self.n_nodes}, edges={n_edges}, "
-            f"forbid_cycle≤{self.max_forbidden_cycle})"
+            f"forbid_cycle≤{self.max_forbidden_cycle}{mp})"
         )
 
     def __eq__(self, other: object) -> bool:
@@ -189,5 +198,6 @@ class DirectedGraph:
         return (
             self.n_nodes == other.n_nodes
             and self.max_forbidden_cycle == other.max_forbidden_cycle
+            and self.max_parents == other.max_parents
             and np.array_equal(self.adj, other.adj)
         )

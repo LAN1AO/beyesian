@@ -74,6 +74,10 @@ class MOEAD:
             node_names = [str(i) for i in range(self.n_nodes)]
         self.node_names = node_names
 
+        # 将 max_parents 注入先验图，后续 copy() 自动继承
+        if config.max_parents is not None:
+            prior_graph.max_parents = config.max_parents
+
         # 初始化评分模块
         self.mdl_score = MDLScore(data, config.n_states)
         self.sdiff_score = StructuralDiffScore(prior_graph)

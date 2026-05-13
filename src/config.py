@@ -13,6 +13,9 @@ class MOEADConfig:
     # n=3 时: 禁止 2-环和 3-环，允许 4+ 环
     max_forbidden_cycle: int = 3  # 2, 3, 或 4
 
+    # 最大父节点数限制（None = 不限制）
+    max_parents: int | None = None
+
     # --- 搜索空间约束 ---
     max_symmetric_diff: int = 10  # 结构对称差总和上限
 
