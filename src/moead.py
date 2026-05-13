@@ -114,6 +114,13 @@ class MOEAD:
         t0 = time.time()
 
         for gen in range(config.n_generations):
+            # 进度条
+            pct = (gen + 1) / config.n_generations
+            bar_len = 30
+            filled = int(bar_len * pct)
+            bar = "█" * filled + "░" * (bar_len - filled)
+            print(f"\r  [{bar}] {gen+1}/{config.n_generations} ({pct:.0%})", end="", flush=True)
+
             # 更新当前种群的 nadir point
             nadir = compute_nadir(self.F)
 
@@ -172,6 +179,8 @@ class MOEAD:
             pareto_mask = non_dominated_sort(self.F)
             history.append(self.F[pareto_mask].copy())
 
+        # 进度条结束后换行
+        print()
         runtime = time.time() - t0
 
         # 提取最终 Pareto 前沿
