@@ -104,7 +104,7 @@ data, _, _ = PriorNetwork.generate_data("asia", n_samples=500, seed=42)
 # 配置
 config = MOEADConfig(
     n_nodes=len(node_names), n_states=n_states,
-    max_cycle_length=3, max_symmetric_diff=15,
+    max_forbidden_cycle=3, max_symmetric_diff=15,
     n_weight_vectors=50, n_neighbors=10, n_generations=200,
     data=data, random_seed=42,
 )
