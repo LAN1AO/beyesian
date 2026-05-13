@@ -51,7 +51,7 @@ def main():
     # MOEA/D 参数
     parser.add_argument(
         "--max-cycle", type=int, default=3, choices=[2, 3, 4],
-        help="最大允许环长度 (默认: 3)",
+        help="禁止此长度及以下的环，允许更长的环 (默认: 3)",
     )
     parser.add_argument(
         "--max-sdiff", type=int, default=15,
@@ -105,11 +105,11 @@ def main():
     print(f"[1/5] 加载先验网络...")
     if args.bif:
         prior_graph, node_names, n_states = PriorNetwork.from_bif(
-            args.bif, max_cycle_length=args.max_cycle
+            args.bif, max_forbidden_cycle=args.max_cycle
         )
     else:
         prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(
-            args.model, max_cycle_length=args.max_cycle
+            args.model, max_forbidden_cycle=args.max_cycle
         )
     print(f"  网络: {args.model}, 节点: {len(node_names)}, "
           f"边: {len(prior_graph.get_edges())}")
@@ -130,7 +130,7 @@ def main():
     config = MOEADConfig(
         n_nodes=len(node_names),
         n_states=n_states,
-        max_cycle_length=args.max_cycle,
+        max_forbidden_cycle=args.max_cycle,
         max_symmetric_diff=args.max_sdiff,
         n_weight_vectors=args.pop_size,
         n_neighbors=args.neighbors,

@@ -31,7 +31,7 @@ def generate_initial_population(
 
     n_pop = config.n_weight_vectors
     n_nodes = prior_graph.n_nodes
-    max_cycle = prior_graph.max_cycle_length
+    max_forbidden = prior_graph.max_forbidden_cycle
     max_sdiff = config.max_symmetric_diff
     population = []
 
@@ -41,7 +41,7 @@ def generate_initial_population(
         graph = _generate_one(
             prior_graph,
             n_nodes,
-            max_cycle,
+            max_forbidden,
             max_sdiff,
             max_perturb,
             sdiff_score,
@@ -55,7 +55,7 @@ def generate_initial_population(
 def _generate_one(
     prior_graph: DirectedGraph,
     n_nodes: int,
-    max_cycle: int,
+    max_forbidden: int,
     max_sdiff: int,
     max_perturb: int,
     sdiff_score,

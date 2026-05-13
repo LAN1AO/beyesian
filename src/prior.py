@@ -10,13 +10,13 @@ class PriorNetwork:
 
     @classmethod
     def from_pgmpy_model(
-        cls, model_name: str, max_cycle_length: int = 3
+        cls, model_name: str, max_forbidden_cycle: int = 3
     ) -> tuple[DirectedGraph, list[str], list[int]]:
         """从 pgmpy 内置 bnlearn 网络加载先验网络。
 
         Args:
             model_name: bnlearn 网络名称，如 'asia', 'alarm', 'sachs' 等
-            max_cycle_length: 图的最大允许环长度
+            max_forbidden_cycle: 禁止的环长度上限（禁止 ≤n 的环）
 
         Returns:
             (graph, node_names, n_states)
@@ -40,19 +40,19 @@ class PriorNetwork:
         ]
 
         graph = DirectedGraph.from_edges(
-            len(node_names), edges, max_cycle_length
+            len(node_names), edges, max_forbidden_cycle
         )
         return graph, node_names, n_states
 
     @classmethod
     def from_bif(
-        cls, path: str, max_cycle_length: int = 3
+        cls, path: str, max_forbidden_cycle: int = 3
     ) -> tuple[DirectedGraph, list[str], list[int]]:
         """从 BIF 文件加载先验网络。
 
         Args:
             path: BIF 文件路径
-            max_cycle_length: 图的最大允许环长度
+            max_forbidden_cycle: 禁止的环长度上限（禁止 ≤n 的环）
 
         Returns:
             (graph, node_names, n_states)
@@ -73,7 +73,7 @@ class PriorNetwork:
         ]
 
         graph = DirectedGraph.from_edges(
-            len(node_names), edges, max_cycle_length
+            len(node_names), edges, max_forbidden_cycle
         )
         return graph, node_names, n_states
 
@@ -84,7 +84,7 @@ class PriorNetwork:
         edges: list[tuple[int, int]],
         n_states: list[int],
         node_names: list[str] | None = None,
-        max_cycle_length: int = 3,
+        max_forbidden_cycle: int = 3,
     ) -> tuple[DirectedGraph, list[str], list[int]]:
         """从边列表构造先验网络。
 
@@ -93,14 +93,14 @@ class PriorNetwork:
             edges: 边列表
             n_states: 每个节点的取值数
             node_names: 节点名称（可选，默认使用索引字符串）
-            max_cycle_length: 图的最大允许环长度
+            max_forbidden_cycle: 禁止的环长度上限（禁止 ≤n 的环）
 
         Returns:
             (graph, node_names, n_states)
         """
         if node_names is None:
             node_names = [str(i) for i in range(n_nodes)]
-        graph = DirectedGraph.from_edges(n_nodes, edges, max_cycle_length)
+        graph = DirectedGraph.from_edges(n_nodes, edges, max_forbidden_cycle)
         return graph, node_names, n_states
 
     @staticmethod

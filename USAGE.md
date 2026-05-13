@@ -44,7 +44,7 @@ python3 main.py --model asia --n-samples 1000 --generations 300 --pop-size 50
 ### 约束
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--max-cycle` | `3` | 允许的最大环长度 (2/3/4) |
+| `--max-cycle` | `3` | 禁止此长度及以下的环 (2/3/4)；更长的环被允许，留待后续 DAG 转化处理 |
 | `--max-sdiff` | `15` | 结构对称差总和上限 |
 
 ### 其他
@@ -67,10 +67,10 @@ python3 main.py --model alarm --pop-size 100 --generations 500 \
 # 使用自定义 BIF 先验
 python3 main.py --bif ./data/my_network.bif --generations 200
 
-# 仅允许 2-环 (更严格的环约束)
+# 仅禁止 2-环 (最宽松: 3+ 环均允许)
 python3 main.py --model asia --max-cycle 2
 
-# 放宽环约束到 4
+# 禁止 ≤4 的环 (最严格: 仅允许 5+ 环)
 python3 main.py --model asia --max-cycle 4 --max-sdiff 30
 ```
 

@@ -9,7 +9,9 @@ class MOEADConfig:
     # --- 问题维度 ---
     n_nodes: int
     n_states: list[int]  # 每个节点的取值数 r_i
-    max_cycle_length: int = 3  # 允许的环长度: 2, 3, 或 4
+    # 禁止此长度及以下的环，允许更长的环（留待后续 DAG 转化阶段处理）
+    # n=3 时: 禁止 2-环和 3-环，允许 4+ 环
+    max_forbidden_cycle: int = 3  # 2, 3, 或 4
 
     # --- 搜索空间约束 ---
     max_symmetric_diff: int = 10  # 结构对称差总和上限
@@ -38,8 +40,8 @@ class MOEADConfig:
     eps: float = 1e-8
 
     def __post_init__(self):
-        if self.max_cycle_length not in (2, 3, 4):
-            raise ValueError(f"max_cycle_length 必须为 2, 3, 或 4, 当前值: {self.max_cycle_length}")
+        if self.max_forbidden_cycle not in (2, 3, 4):
+            raise ValueError(f"max_forbidden_cycle 必须为 2, 3, 或 4, 当前值: {self.max_forbidden_cycle}")
         if self.data is not None:
             m, n = self.data.shape
             if n != self.n_nodes:
