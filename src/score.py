@@ -83,16 +83,13 @@ class MDLScore:
         joint = parent_configs * r_i + self.data[:, node]
         m_ijk = np.bincount(joint, minlength=total_parent_states * r_i)
 
-        # 似然项: Σ_j Σ_k m_ijk * log2(m_ijk / m_ij)
-        mdl = 0.0
-        for j in range(total_parent_states):
-            mj = m_ij[j]
-            if mj == 0:
-                continue
-            for k in range(r_i):
-                cnt = m_ijk[j * r_i + k]
-                if cnt > 0:
-                    mdl += cnt * np.log2(cnt / mj)
+        # 似然项: Σ_j Σ_k m_ijk * log2(m_ijk / m_ij)  — 向量化版本
+        m_ijk_2d = m_ijk.reshape(total_parent_states, r_i)
+        # 仅计算 m_ijk > 0 的位置
+        valid = m_ijk_2d > 0
+        # m_ij 广播到 (total_parent_states, r_i)
+        m_ij_bc = np.broadcast_to(m_ij[:, np.newaxis], (total_parent_states, r_i))
+        mdl = np.sum(m_ijk_2d[valid] * np.log2(m_ijk_2d[valid] / m_ij_bc[valid]))
 
         # 惩罚项
         penalty = 0.5 * total_parent_states * (r_i - 1) * self._log2_m

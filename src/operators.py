@@ -16,21 +16,24 @@ def crossover(
     nadir: np.ndarray,
     eps: float = 1e-8,
     rng: random.Random | None = None,
+    parent1_scores: dict[int, tuple[float, float]] | None = None,
+    parent2_scores: dict[int, tuple[float, float]] | None = None,
 ) -> DirectedGraph:
     """逐节点父集比较交叉算子。
 
     对每个节点，比较两个父代中该节点的父集（用归一化切比雪夫聚合），
-    选择更优的父集。然后按节点索引顺序组装子代图，加入边时若产生
-    非法环则跳过该边。
+    选择更优的父集。若提供 parent*_scores，则使用缓存评分（免重复计算）。
 
     Args:
         parent1, parent2: 两个父代图
-        score: CompositeScore 实例
+        score: CompositeScore 实例（仅用于缓存未命中时的兜底）
         weight: 当前子问题的权重向量 (n_objectives,)
         ideal: 当前 ideal point
         nadir: 当前 nadir point
         eps: 防止除零
         rng: 随机数生成器
+        parent1_scores: 父代1的 {node: (mdl, sdiff)} 缓存（可选）
+        parent2_scores: 父代2的 {node: (mdl, sdiff)} 缓存（可选）
 
     Returns:
         子代图
@@ -40,7 +43,8 @@ def crossover(
 
     n_nodes = parent1.n_nodes
     max_forbidden = parent1.max_forbidden_cycle
-    child = DirectedGraph(n_nodes, max_forbidden)
+    max_parents = parent1.max_parents
+    child = DirectedGraph(n_nodes, max_forbidden, max_parents=max_parents)
 
     # 随机化节点处理顺序，避免对 parent1 的偏向
     node_order = list(range(n_nodes))
@@ -56,9 +60,16 @@ def crossover(
         if set(p1_parents) == set(p2_parents):
             selected = p1_parents
         else:
-            # 计算两种父集方案的 (mdl, sdiff)
-            mdl1, sd1 = score.node_pair_score(parent1, node, p1_parents)
-            mdl2, sd2 = score.node_pair_score(parent2, node, p2_parents)
+            # 优先使用缓存评分，否则实时计算
+            if parent1_scores is not None and node in parent1_scores:
+                mdl1, sd1 = parent1_scores[node]
+            else:
+                mdl1, sd1 = score.node_pair_score(parent1, node, p1_parents)
+
+            if parent2_scores is not None and node in parent2_scores:
+                mdl2, sd2 = parent2_scores[node]
+            else:
+                mdl2, sd2 = score.node_pair_score(parent2, node, p2_parents)
 
             # 归一化切比雪夫聚合: g = max_i { λ_i * |f_i - z*_i| / range_i }
             f1 = np.array([mdl1, sd1])
