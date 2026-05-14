@@ -79,7 +79,8 @@ class MOEAD:
             prior_graph.max_parents = config.max_parents
 
         # 初始化评分模块
-        self.mdl_score = MDLScore(data, config.n_states)
+        self.mdl_score = MDLScore(data, config.n_states,
+                                   penalty_scale=config.mdl_penalty_scale)
         self.sdiff_score = StructuralDiffScore(prior_graph)
         self.cs = CompositeScore(self.mdl_score, self.sdiff_score)
 

@@ -9,20 +9,28 @@ class MDLScore:
     具有可分解性: 每个节点的评分仅依赖于其父节点集合。
 
     MDL(G, D) = Σ_i [ Σ_j Σ_k m_ijk * log2(m_ijk / m_ij)
-                     - 0.5 * q_i * (r_i - 1) * log2(m) ]
+                     - penalty_scale * 0.5 * q_i * (r_i - 1) * log2(m) ]
+
+    penalty_scale 控制惩罚强度:
+      1.0 = 标准 BIC/MDL
+      0.5 = 半惩罚
+      0.0 = 纯似然（无惩罚，必定会过拟合为完全图）
     """
 
-    def __init__(self, data: np.ndarray, n_states: list[int]):
+    def __init__(self, data: np.ndarray, n_states: list[int],
+                 penalty_scale: float = 1.0):
         """
         Args:
             data: (m_samples, n_nodes) 数据集，每列为整数编码 [0..r_i-1]
             n_states: 每个节点的取值数 r_i
+            penalty_scale: 惩罚项缩放因子，默认 1.0（标准 BIC）
         """
         self.data = data.astype(np.int32)
         self.n_states = n_states
         self.n_nodes = len(n_states)
         self.n_samples = data.shape[0]
         self._log2_m = np.log2(self.n_samples)
+        self._penalty_scale = penalty_scale
 
     def score_node(self, node: int, parents: list[int]) -> float:
         """计算单个节点在给定父集下的 MDL 评分分量。"""
@@ -92,7 +100,7 @@ class MDLScore:
         mdl = np.sum(m_ijk_2d[valid] * np.log2(m_ijk_2d[valid] / m_ij_bc[valid]))
 
         # 惩罚项
-        penalty = 0.5 * total_parent_states * (r_i - 1) * self._log2_m
+        penalty = self._penalty_scale * 0.5 * total_parent_states * (r_i - 1) * self._log2_m
         return mdl - penalty
 
 

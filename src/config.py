@@ -13,6 +13,9 @@ class MOEADConfig:
     # n=3 时: 禁止 2-环和 3-环，允许 4+ 环
     max_forbidden_cycle: int = 3  # 2, 3, 或 4
 
+    # MDL 惩罚缩放（1.0 = 标准 BIC, 越小惩罚越轻）
+    mdl_penalty_scale: float = 1.0
+
     # 最大父节点数限制（None = 不限制）
     max_parents: int | None = None
 

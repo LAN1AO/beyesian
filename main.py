@@ -58,6 +58,10 @@ def main():
         help="每个节点最大父节点数 (默认: 不限制)",
     )
     parser.add_argument(
+        "--mdl-penalty", type=float, default=1.0,
+        help="MDL 惩罚项缩放因子 (默认 1.0=标准BIC, 越小惩罚越轻)",
+    )
+    parser.add_argument(
         "--max-sdiff", type=int, default=15,
         help="结构对称差上限 (默认: 15)",
     )
@@ -136,6 +140,7 @@ def main():
         n_states=n_states,
         max_forbidden_cycle=args.max_cycle,
         max_parents=args.max_parents,
+        mdl_penalty_scale=args.mdl_penalty,
         max_symmetric_diff=args.max_sdiff,
         n_weight_vectors=args.pop_size,
         n_neighbors=args.neighbors,
