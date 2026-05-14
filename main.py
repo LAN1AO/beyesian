@@ -208,7 +208,66 @@ def main():
         obj_conv_plot = os.path.join(args.output, "objective_convergence.png")
         plot_objective_convergence(result, save_path=obj_conv_plot)
 
+        # 绘制三个代表解的网络结构图
+        if result.pareto_graphs and _has_networkx():
+            _plot_three_networks(result, args.output, node_names)
+
     print(f"\n  全部完成! 输出目录: {args.output}")
+
+
+def _has_networkx() -> bool:
+    """检查 networkx 是否可用。"""
+    try:
+        import networkx  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _plot_three_networks(result, output_dir: str, node_names: list[str]) -> None:
+    """绘制三个代表解：最接近先验、MDL最优、两者平衡。"""
+    f = result.pareto_f
+    graphs = result.pareto_graphs
+    n = len(graphs)
+
+    # 1) 最接近先验: Sdiff 最小（若并列则选 MDL 更优）
+    idx_prior = int(np.argmin(f[:, 1]))
+    # 2) MDL 最优: MDL 最小
+    idx_mdl = int(np.argmin(f[:, 0]))
+    # 3) 平衡解: Pareto 前沿上到 "Sdiff=0 MDL最优" 连线距离最近的点
+    #    即接近两个极端的中点
+    if n > 2:
+        min_f = f.min(axis=0)
+        max_f = f.max(axis=0)
+        range_f = np.maximum(max_f - min_f, 1e-8)
+        f_norm = (f - min_f) / range_f
+        # 从两个极端选出非端点最近中点的解
+        endpoints = {idx_prior, idx_mdl}
+        mid = np.array([f_norm[idx_mdl, 0], f_norm[idx_prior, 1]])
+        best_dist = float("inf")
+        idx_bal = 0
+        for i in range(n):
+            if i in endpoints:
+                continue
+            d = np.sqrt((f_norm[i, 0] - mid[0]) ** 2 + (f_norm[i, 1] - mid[1]) ** 2)
+            if d < best_dist:
+                best_dist = d
+                idx_bal = i
+        # 若无其它解则回退
+        if best_dist == float("inf"):
+            idx_bal = idx_prior
+    else:
+        idx_bal = 0
+
+    labels = [
+        (idx_prior, "closest_to_prior", "Closest to Prior (min Sdiff)"),
+        (idx_mdl, "best_mdl", "Best MDL"),
+        (idx_bal, "balanced", "Balanced"),
+    ]
+
+    for idx, fname, title in labels:
+        path = os.path.join(output_dir, f"network_{fname}.png")
+        plot_network(graphs[idx], node_names, title=title, save_path=path)
 
 
 def _save_bif(graph, node_names: list[str], n_states: list[int],
