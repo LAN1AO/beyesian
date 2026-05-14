@@ -8,13 +8,15 @@ class MDLScore:
 
     具有可分解性: 每个节点的评分仅依赖于其父节点集合。
 
-    MDL(G, D) = Σ_i [ Σ_j Σ_k m_ijk * log2(m_ijk / m_ij)
-                     - penalty_scale * 0.5 * q_i * (r_i - 1) * log2(m) ]
+    BIC(G, D) = Σ_i Σ_j Σ_k m_ijk * log2(m_ijk / m_ij)
+              - (log2(m)/2) * Σ_i q_i * (r_i - 1)     [越大越好]
+
+    MDL(G, D) = -BIC(G, D)                              [越小越好]
 
     penalty_scale 控制惩罚强度:
       1.0 = 标准 BIC/MDL
       0.5 = 半惩罚
-      0.0 = 纯似然（无惩罚，必定会过拟合为完全图）
+      0.0 = 纯似然（无惩罚）
     """
 
     def __init__(self, data: np.ndarray, n_states: list[int],
@@ -99,9 +101,10 @@ class MDLScore:
         m_ij_bc = np.broadcast_to(m_ij[:, np.newaxis], (total_parent_states, r_i))
         mdl = np.sum(m_ijk_2d[valid] * np.log2(m_ijk_2d[valid] / m_ij_bc[valid]))
 
-        # 惩罚项
-        penalty = self._penalty_scale * 0.5 * total_parent_states * (r_i - 1) * self._log2_m
-        return mdl - penalty
+        # BIC = 似然项 - 惩罚项（越大越好）
+        bic = mdl - self._penalty_scale * 0.5 * total_parent_states * (r_i - 1) * self._log2_m
+        # MDL = -BIC（越小越好）
+        return -bic
 
 
 class StructuralDiffScore:
