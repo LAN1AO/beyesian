@@ -165,10 +165,12 @@ def plot_network(
     title: str = "Network Structure",
     save_path: str | None = None,
 ) -> plt.Figure:
-    """绘制贝叶斯网络结构图。"""
-    import networkx as nx
+    """绘制贝叶斯网络结构图。
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    优先使用 PyGraphviz（Graphviz dot 布局，层次分明），
+    若不可用则回退到 networkx + matplotlib。
+    """
+    import networkx as nx
 
     G = nx.DiGraph()
     G.add_nodes_from(range(graph.n_nodes))
@@ -176,22 +178,77 @@ def plot_network(
         G.add_edge(u, v)
 
     labels = {i: name for i, name in enumerate(node_names)}
-    pos = nx.spring_layout(G, seed=42, k=2)
 
-    nx.draw_networkx_nodes(G, pos, node_color="lightblue", node_size=800, ax=ax)
-    nx.draw_networkx_labels(G, pos, labels, font_size=9, ax=ax)
-    nx.draw_networkx_edges(
-        G, pos, arrowstyle="->", arrowsize=15,
-        edge_color="gray", alpha=0.7, ax=ax,
-    )
+    # 尝试 PyGraphviz（dot 层次布局，DAG 可视化的标准方案）
+    try:
+        return _plot_with_pygraphviz(G, labels, title, save_path)
+    except ImportError:
+        return _plot_with_networkx(G, labels, title, save_path)
+
+
+def _plot_with_pygraphviz(G, labels: dict, title: str,
+                          save_path: str | None) -> plt.Figure:
+    """使用 PyGraphviz + Graphviz dot 引擎绘制。"""
+    import pygraphviz as pgv
+
+    A = pgv.AGraph(directed=True, rankdir="TB", splines="curved",
+                   nodesep=0.3, ranksep=0.5)
+    for n in G.nodes():
+        A.add_node(n, label=labels[n], shape="box",
+                   style="rounded,filled", fillcolor="#d6eaf8",
+                   fontname="DejaVu Sans", fontsize=11)
+    for u, v in G.edges():
+        A.add_edge(u, v, color="#555555", arrowsize=0.8)
+
+    # 用 dot 生成层次布局并渲染到 PNG
+    A.layout(prog="dot")
+    if save_path:
+        A.draw(save_path)
+        print(f"Network structure saved to: {save_path} (PyGraphviz)")
+
+    # 同时返回 matplotlib figure 以保持接口一致
+    fig, ax = plt.subplots(figsize=(10, 8))
+    img = plt.imread(save_path) if save_path else None
+    if img is not None:
+        ax.imshow(img)
+    ax.set_title(title, fontsize=14)
+    ax.axis("off")
+    fig.tight_layout()
+    return fig
+
+
+def _plot_with_networkx(G, labels: dict, title: str,
+                        save_path: str | None) -> plt.Figure:
+    """使用 networkx + matplotlib 绘制（无 Graphviz 时的回退方案）。"""
+    import networkx as nx
+
+    fig, ax = plt.subplots(figsize=(12, 9))
+
+    # Kamada-Kawai 力导向布局（比 spring_layout 更美观）
+    try:
+        pos = nx.kamada_kawai_layout(G)
+    except Exception:
+        pos = nx.spring_layout(G, seed=42, k=3, iterations=100)
+
+    # 节点
+    nx.draw_networkx_nodes(G, pos, node_color="#d6eaf8",
+                           node_size=900, node_shape="s",
+                           edgecolors="#2c3e50", linewidths=1.2, ax=ax)
+    # 标签
+    nx.draw_networkx_labels(G, pos, labels, font_size=9,
+                            font_family="sans-serif", font_weight="medium", ax=ax)
+    # 边（弧线箭头）
+    nx.draw_networkx_edges(G, pos, arrowstyle="-|>", arrowsize=18,
+                           edge_color="#7f8c8d", alpha=0.8,
+                           connectionstyle="arc3,rad=0.1", ax=ax)
 
     ax.set_title(title, fontsize=14)
     ax.axis("off")
-
     fig.tight_layout()
 
     if save_path:
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
-        print(f"Network structure saved to: {save_path}")
+        fig.savefig(save_path, dpi=150, bbox_inches="tight",
+                    facecolor="white", edgecolor="none")
+        print(f"Network structure saved to: {save_path} (networkx)")
 
     return fig
