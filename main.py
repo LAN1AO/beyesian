@@ -169,7 +169,9 @@ def main():
     print(f"  {'#':>3}  {'Edges':>5}  {'Cycles':>6}  {'MDL':>12}  {'Sdiff':>5}")
     print(f"  {'-' * 40}")
     for i, (g, f) in enumerate(zip(result.pareto_graphs, result.pareto_f)):
-        print(f"  {i:>3}  {len(g.get_edges()):>5}  {g.count_cycles():>6}  {f[0]:>12.2f}  {f[1]:>5.0f}")
+        n_edges = int(np.sum(g.adj))
+        n_cycles = g.count_cycles()
+        print(f"  {i:>3}  {n_edges:>5}  {n_cycles:>6}  {f[0]:>12.2f}  {f[1]:>5.0f}")
 
     # ── 5. 保存结果和可视化 ──────────────────────────────────
     print(f"\n[5/5] 保存结果...")
@@ -185,7 +187,8 @@ def main():
     with open(pareto_path, "w") as f:
         f.write("index,edges,cycles,mdl,sdiff\n")
         for i, (g, fv) in enumerate(zip(result.pareto_graphs, result.pareto_f)):
-            f.write(f"{i},{len(g.get_edges())},{g.count_cycles()},{fv[0]:.4f},{fv[1]:.0f}\n")
+            n_edges = int(np.sum(g.adj))
+            f.write(f"{i},{n_edges},{g.count_cycles()},{fv[0]:.4f},{fv[1]:.0f}\n")
     print(f"  Pareto CSV: {pareto_path}")
 
     # 保存最优图（BIF 格式）

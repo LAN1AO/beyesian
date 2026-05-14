@@ -182,7 +182,10 @@ def plot_network(
     # 尝试 Graphviz dot（层次布局，DAG 可视化的标准方案）
     try:
         return _plot_with_graphviz(G, labels, title, save_path)
-    except Exception:
+    except ImportError:
+        return _plot_with_networkx(G, labels, title, save_path)
+    except Exception as e:
+        print(f"  [warn] Graphviz 渲染失败 ({e})，回退到 networkx")
         return _plot_with_networkx(G, labels, title, save_path)
 
 
@@ -203,20 +206,20 @@ def _plot_with_graphviz(G, labels: dict, title: str,
         dot.edge(str(u), str(v))
 
     if save_path:
-        # graphviz 默认添加 .png 后缀，先渲染到临时路径再重命名
         import os
-        tmp_path = save_path.rsplit(".", 1)[0]  # 去掉 .png
-        dot.render(tmp_path, cleanup=True)
-        # dot.render 输出为 tmp_path.png，若与 save_path 不同则重命名
-        rendered = tmp_path + ".png"
+        # graphviz 的 render 会自动加 .png 后缀，用临时文件名再 rename
+        base = save_path
+        if base.endswith(".png"):
+            base = base[:-4]
+        dot.render(base, cleanup=True)
+        rendered = base + ".png"
         if rendered != save_path:
             os.rename(rendered, save_path)
         print(f"Network structure saved to: {save_path} (Graphviz dot)")
 
     fig, ax = plt.subplots(figsize=(10, 8))
     if save_path:
-        img = plt.imread(save_path)
-        ax.imshow(img)
+        ax.imshow(plt.imread(save_path))
     ax.set_title(title, fontsize=14)
     ax.axis("off")
     fig.tight_layout()

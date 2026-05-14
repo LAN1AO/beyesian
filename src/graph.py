@@ -143,52 +143,40 @@ class DirectedGraph:
                     queue.append((child, depth + 1))
         return None
 
-    def has_forbidden_cycle(self, max_forbidden: int) -> bool:
-        """检查图中是否存在被禁短环（长度 ≤ max_forbidden），用于校验。"""
+    def _iter_cycles(self, max_length: int | None = None):
+        """迭代图中所有简单环，每个环只产出一次（以环中最小节点为起点）。
+
+        Yields: (cycle_length, path_list)
+        """
         for start in range(self.n_nodes):
             stack = [(start, [start])]
             while stack:
                 node, path = stack.pop()
-                if len(path) > max_forbidden:
+                if max_length is not None and len(path) > max_length:
                     continue
                 for child in self.get_children(node):
-                    if child == start and 2 <= len(path) <= max_forbidden:
-                        return True
-                    if child not in path:
+                    if child == start:
+                        if min(path) == start:  # 只在最小节点处产出，避免重复
+                            yield len(path), path
+                    elif child not in path:
                         stack.append((child, path + [child]))
+
+    def has_forbidden_cycle(self, max_forbidden: int) -> bool:
+        for length, _ in self._iter_cycles(max_length=max_forbidden):
+            if 2 <= length <= max_forbidden:
+                return True
         return False
 
     def _is_valid(self) -> bool:
-        """校验图是否满足环长度约束（无被禁短环）。"""
         return not self.has_forbidden_cycle(self.max_forbidden_cycle)
 
     def count_cycles(self) -> int:
-        """统计图中所有环的数量（忽略长度限制，计数所有简单环）。"""
-        count = 0
-        for start in range(self.n_nodes):
-            stack = [(start, [start])]
-            while stack:
-                node, path = stack.pop()
-                for child in self.get_children(node):
-                    if child == start:
-                        count += 1
-                    elif child not in path:
-                        stack.append((child, path + [child]))
-        return count
+        return sum(1 for _ in self._iter_cycles())
 
     def has_cycle_with_length(self, length: int) -> bool:
-        """检查是否存在精确长度为 length 的环。"""
-        for start in range(self.n_nodes):
-            stack = [(start, [start])]
-            while stack:
-                node, path = stack.pop()
-                if len(path) > length:
-                    continue
-                for child in self.get_children(node):
-                    if child == start and len(path) == length:
-                        return True
-                    if child not in path:
-                        stack.append((child, path + [child]))
+        for clen, _ in self._iter_cycles(max_length=length):
+            if clen == length:
+                return True
         return False
 
     # ── 工具方法 ──────────────────────────────────────────────
