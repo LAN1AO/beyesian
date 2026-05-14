@@ -179,37 +179,43 @@ def plot_network(
 
     labels = {i: name for i, name in enumerate(node_names)}
 
-    # 尝试 PyGraphviz（dot 层次布局，DAG 可视化的标准方案）
+    # 尝试 Graphviz dot（层次布局，DAG 可视化的标准方案）
     try:
-        return _plot_with_pygraphviz(G, labels, title, save_path)
-    except ImportError:
+        return _plot_with_graphviz(G, labels, title, save_path)
+    except Exception:
         return _plot_with_networkx(G, labels, title, save_path)
 
 
-def _plot_with_pygraphviz(G, labels: dict, title: str,
-                          save_path: str | None) -> plt.Figure:
-    """使用 PyGraphviz + Graphviz dot 引擎绘制。"""
-    import pygraphviz as pgv
+def _plot_with_graphviz(G, labels: dict, title: str,
+                        save_path: str | None) -> plt.Figure:
+    """使用 graphviz Python 包 + dot 引擎绘制（层次化 DAG 布局）。"""
+    import graphviz
 
-    A = pgv.AGraph(directed=True, rankdir="TB", splines="curved",
-                   nodesep=0.3, ranksep=0.5)
+    dot = graphviz.Digraph(format="png")
+    dot.attr(rankdir="TB", splines="curved", nodesep="0.3", ranksep="0.5")
+    dot.attr("node", shape="box", style="rounded,filled",
+             fillcolor="#d6eaf8", fontname="DejaVu Sans", fontsize="11")
+    dot.attr("edge", color="#555555", arrowsize="0.8")
+
     for n in G.nodes():
-        A.add_node(n, label=labels[n], shape="box",
-                   style="rounded,filled", fillcolor="#d6eaf8",
-                   fontname="DejaVu Sans", fontsize=11)
+        dot.node(str(n), labels[n])
     for u, v in G.edges():
-        A.add_edge(u, v, color="#555555", arrowsize=0.8)
+        dot.edge(str(u), str(v))
 
-    # 用 dot 生成层次布局并渲染到 PNG
-    A.layout(prog="dot")
     if save_path:
-        A.draw(save_path)
-        print(f"Network structure saved to: {save_path} (PyGraphviz)")
+        # graphviz 默认添加 .png 后缀，先渲染到临时路径再重命名
+        import os
+        tmp_path = save_path.rsplit(".", 1)[0]  # 去掉 .png
+        dot.render(tmp_path, cleanup=True)
+        # dot.render 输出为 tmp_path.png，若与 save_path 不同则重命名
+        rendered = tmp_path + ".png"
+        if rendered != save_path:
+            os.rename(rendered, save_path)
+        print(f"Network structure saved to: {save_path} (Graphviz dot)")
 
-    # 同时返回 matplotlib figure 以保持接口一致
     fig, ax = plt.subplots(figsize=(10, 8))
-    img = plt.imread(save_path) if save_path else None
-    if img is not None:
+    if save_path:
+        img = plt.imread(save_path)
         ax.imshow(img)
     ax.set_title(title, fontsize=14)
     ax.axis("off")
