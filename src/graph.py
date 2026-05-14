@@ -162,6 +162,20 @@ class DirectedGraph:
         """校验图是否满足环长度约束（无被禁短环）。"""
         return not self.has_forbidden_cycle(self.max_forbidden_cycle)
 
+    def count_cycles(self) -> int:
+        """统计图中所有环的数量（忽略长度限制，计数所有简单环）。"""
+        count = 0
+        for start in range(self.n_nodes):
+            stack = [(start, [start])]
+            while stack:
+                node, path = stack.pop()
+                for child in self.get_children(node):
+                    if child == start:
+                        count += 1
+                    elif child not in path:
+                        stack.append((child, path + [child]))
+        return count
+
     def has_cycle_with_length(self, length: int) -> bool:
         """检查是否存在精确长度为 length 的环。"""
         for start in range(self.n_nodes):
