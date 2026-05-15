@@ -111,6 +111,7 @@ def main():
 
     # ── 1. 加载先验网络 ──────────────────────────────────────
     print(f"[1/5] 加载先验网络...")
+    original_graph = None  # 仅 bnlearn 模式保留原始图引用
     if args.bif:
         prior_graph, node_names, n_states = PriorNetwork.from_bif(
             args.bif, max_forbidden_cycle=args.max_cycle
@@ -119,8 +120,12 @@ def main():
         prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(
             args.model, max_forbidden_cycle=args.max_cycle
         )
-    print(f"  网络: {args.model}, 节点: {len(node_names)}, "
-          f"边: {len(prior_graph.get_edges())}")
+        original_graph = prior_graph.copy()
+        # bnlearn 模型：先验图取原始图随机变异 6 次，避免以标准答案作为先验
+        prior_graph = PriorNetwork.perturb(prior_graph, n_changes=6, seed=args.seed)
+        print(f"  原始边数: {len(original_graph.get_edges())}, "
+              f"变异后边数: {len(prior_graph.get_edges())}")
+    print(f"  网络: {args.model}, 节点: {len(node_names)}")
 
     # ── 2. 准备数据 ──────────────────────────────────────────
     print(f"[2/5] 准备数据...")
@@ -207,8 +212,21 @@ def main():
     # 可视化
     if not args.no_plot:
         print(f"  生成图表...")
+
+        # 计算原始图（未变异）在目标空间中的位置
+        original_pos = None
+        if original_graph is not None:
+            from src.score import MDLScore, StructuralDiffScore
+            mdl_scorer = MDLScore(data, n_states,
+                                  penalty_scale=args.mdl_penalty)
+            sdiff_scorer = StructuralDiffScore(prior_graph)
+            orig_mdl = mdl_scorer.score_graph(original_graph)
+            orig_sdiff = sdiff_scorer.score_graph(original_graph)
+            original_pos = (orig_mdl, orig_sdiff)
+            print(f"  原始图目标值: MDL={orig_mdl:.2f}, Sdiff={orig_sdiff:.0f}")
+
         pareto_plot = os.path.join(args.output, "pareto_front.png")
-        plot_pareto_front(result, save_path=pareto_plot)
+        plot_pareto_front(result, save_path=pareto_plot, original_pos=original_pos)
 
         conv_plot = os.path.join(args.output, "convergence.png")
         plot_convergence(result, save_path=conv_plot)

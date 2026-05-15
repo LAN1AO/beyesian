@@ -12,6 +12,7 @@ def plot_pareto_front(
     title: str = "Pareto Front",
     save_path: str | None = None,
     show_prior: bool = True,
+    original_pos: tuple[float, float] | None = None,
 ) -> plt.Figure:
     """绘制 Pareto 前沿散点图。
 
@@ -20,9 +21,7 @@ def plot_pareto_front(
         title: 图表标题
         save_path: 若给定，保存图表到此路径
         show_prior: 是否标注先验网络位置
-
-    Returns:
-        matplotlib Figure
+        original_pos: (mdl, sdiff) 原始 bnlearn 网络在目标空间中的位置
     """
     fig, ax = plt.subplots(figsize=(8, 6))
 
@@ -55,6 +54,16 @@ def plot_pareto_front(
                 label="Prior Network",
                 zorder=5,
             )
+
+    # 标注原始 bnlearn 网络位置
+    if original_pos is not None:
+        ax.scatter(
+            [original_pos[0]], [original_pos[1]],
+            c="green", s=100, marker="D",
+            edgecolors="darkgreen", linewidth=1,
+            label="Original BN",
+            zorder=5,
+        )
 
     ax.set_xlabel("MDL Score", fontsize=12)
     ax.set_ylabel("Structural Symmetric Difference", fontsize=12)
