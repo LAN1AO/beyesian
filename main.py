@@ -187,14 +187,21 @@ def main():
         pickle.dump(result, f)
     print(f"  结果: {result_path}")
 
-    # 保存 Pareto 前沿（文本格式）
+    # 保存 Pareto 前沿（文本格式），去重
     pareto_path = os.path.join(args.output, "pareto_front.csv")
+    seen = set()
     with open(pareto_path, "w") as f:
         f.write("index,edges,cycles,mdl,sdiff\n")
-        for i, (g, fv) in enumerate(zip(result.pareto_graphs, result.pareto_f)):
+        idx = 0
+        for g, fv in zip(result.pareto_graphs, result.pareto_f):
+            key = (round(fv[0], 4), int(fv[1]))
+            if key in seen:
+                continue
+            seen.add(key)
             n_edges = int(np.sum(g.adj))
-            f.write(f"{i},{n_edges},{g.count_cycles()},{fv[0]:.4f},{fv[1]:.0f}\n")
-    print(f"  Pareto CSV: {pareto_path}")
+            f.write(f"{idx},{n_edges},{g.count_cycles()},{fv[0]:.4f},{fv[1]:.0f}\n")
+            idx += 1
+    print(f"  Pareto CSV: {pareto_path} ({idx} 个唯一解)")
 
     # 保存最优图（BIF 格式）
     if result.pareto_graphs:
