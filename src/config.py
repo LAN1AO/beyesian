@@ -10,8 +10,8 @@ class MOEADConfig:
     n_nodes: int
     n_states: list[int]  # 每个节点的取值数 r_i
     # 禁止此长度及以下的环，允许更长的环（留待后续 DAG 转化阶段处理）
-    # n=3 时: 禁止 2-环和 3-环，允许 4+ 环
-    max_forbidden_cycle: int = 3  # 2, 3, 或 4
+    # 默认值在 main.py 中根据 n_nodes 动态计算: floor(sqrt(n_nodes))
+    max_forbidden_cycle: int = 3
 
     # MDL 惩罚缩放（1.0 = 标准 BIC, 越小惩罚越轻）
     mdl_penalty_scale: float = 1.0
@@ -46,8 +46,8 @@ class MOEADConfig:
     eps: float = 1e-8
 
     def __post_init__(self):
-        if self.max_forbidden_cycle not in (2, 3, 4):
-            raise ValueError(f"max_forbidden_cycle 必须为 2, 3, 或 4, 当前值: {self.max_forbidden_cycle}")
+        if self.max_forbidden_cycle < 2:
+            raise ValueError(f"max_forbidden_cycle 必须 ≥ 2, 当前值: {self.max_forbidden_cycle}")
         if self.data is not None:
             m, n = self.data.shape
             if n != self.n_nodes:

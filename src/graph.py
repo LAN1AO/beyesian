@@ -14,10 +14,9 @@ class DirectedGraph:
 
     def __init__(self, n_nodes: int, max_forbidden_cycle: int = 3,
                  max_parents: int | None = None):
-        if max_forbidden_cycle not in (2, 3, 4):
+        if max_forbidden_cycle < 2:
             raise ValueError(
-                f"max_forbidden_cycle 必须为 2, 3, 或 4, "
-                f"当前值: {max_forbidden_cycle}"
+                f"max_forbidden_cycle 必须 ≥ 2, 当前值: {max_forbidden_cycle}"
             )
         self.n_nodes = n_nodes
         self.max_forbidden_cycle = max_forbidden_cycle

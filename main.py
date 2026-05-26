@@ -50,8 +50,9 @@ def main():
 
     # MOEA/D 参数
     parser.add_argument(
-        "--max-cycle", type=int, default=3, choices=[2, 3, 4],
-        help="禁止此长度及以下的环，允许更长的环 (默认: 3)",
+        "--max-cycle", type=int, default=None,
+        help="禁止此长度及以下的环，允许更长的环 "
+             "(默认: floor(sqrt(n_nodes)))",
     )
     parser.add_argument(
         "--max-parents", type=int, default=None,
@@ -108,6 +109,12 @@ def main():
 
     # 创建输出目录
     os.makedirs(args.output, exist_ok=True)
+
+    # 若未指定 max_cycle，根据节点数计算默认值: floor(sqrt(n_nodes))
+    if args.max_cycle is None:
+        n_peek = _peek_n_nodes(args.bif, args.model)
+        args.max_cycle = max(2, int(np.sqrt(n_peek)))
+        print(f"  max_cycle 未指定，自动设为 floor(sqrt({n_peek})) = {args.max_cycle}")
 
     # ── 1. 加载先验网络 ──────────────────────────────────────
     print(f"[1/5] 加载先验网络...")
@@ -246,6 +253,19 @@ def main():
             _plot_three_networks(result, args.output, node_names)
 
     print(f"\n  全部完成! 输出目录: {args.output}")
+
+
+def _peek_n_nodes(bif_path: str | None, model_name: str) -> int:
+    """快速获取模型的节点数（不构造 DirectedGraph）。"""
+    if bif_path:
+        from pgmpy.readwrite import BIFReader
+        return len(BIFReader(bif_path).get_model().nodes())
+    else:
+        from pgmpy.example_models import load_model
+        name = model_name
+        if not name.startswith("bnlearn/") and not name.startswith("bnrep/"):
+            name = f"bnlearn/{name}"
+        return len(load_model(name).nodes())
 
 
 def _has_networkx() -> bool:
