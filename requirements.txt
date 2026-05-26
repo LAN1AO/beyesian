@@ -2,3 +2,4 @@ pgmpy>=0.1.23
 numpy
 matplotlib
 networkx
+graphviz

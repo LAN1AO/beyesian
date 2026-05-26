@@ -43,10 +43,6 @@ def main():
         "--n-samples", type=int, default=500,
         help="合成数据样本数 (默认: 500)",
     )
-    parser.add_argument(
-        "--data-file", type=str, default=None,
-        help="外部数据文件路径 (.npy 格式)",
-    )
 
     # MOEA/D 参数
     parser.add_argument(
@@ -136,14 +132,10 @@ def main():
 
     # ── 2. 准备数据 ──────────────────────────────────────────
     print(f"[2/5] 准备数据...")
-    if args.data_file:
-        data = np.load(args.data_file).astype(np.int32)
-        print(f"  从文件加载: {data.shape}")
-    else:
-        data, _, _ = PriorNetwork.generate_data(
-            args.model, n_samples=args.n_samples, seed=args.seed
-        )
-        print(f"  合成数据: {data.shape}, 样本数: {args.n_samples}")
+    data, _, _ = PriorNetwork.generate_data(
+        args.model, n_samples=args.n_samples, seed=args.seed
+    )
+    print(f"  合成数据: {data.shape}, 样本数: {args.n_samples}")
 
     # ── 3. 配置 MOEA/D ───────────────────────────────────────
     print(f"[3/5] 配置 MOEA/D...")
