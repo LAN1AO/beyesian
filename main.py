@@ -306,7 +306,6 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
     """在子进程中执行一次单运行。"""
     cmd = [
         sys.executable, os.path.abspath(__file__),
-        "--model", args.model,
         "--prior-file", prior_file,
         "--data-file", data_file,
         "--pop-size", str(args.pop_size),
@@ -362,9 +361,16 @@ def _run_batch(args):
         print(f"  共享先验: {len(node_names)} 节点, "
               f"{len(prior_graph.get_edges())} 边")
 
-        data, _, _ = PriorNetwork.generate_data(
-            args.model, n_samples=args.n_samples, seed=9999,
-        )
+        if args.bif:
+            from pgmpy.readwrite import BIFReader
+            model = BIFReader(args.bif).get_model()
+            data, _, _ = PriorNetwork.generate_data(
+                model, n_samples=args.n_samples, seed=9999,
+            )
+        else:
+            data, _, _ = PriorNetwork.generate_data(
+                args.model, n_samples=args.n_samples, seed=9999,
+            )
         np.save(data_file, data)
         print(f"  共享数据: {data.shape[0]} 样本")
     else:

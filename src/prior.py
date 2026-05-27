@@ -145,7 +145,7 @@ class PriorNetwork:
                     if not g._would_create_any_cycle(v, u):
                         g.add_edge(v, u)
                     else:
-                        g.add_edge(u, v)  # 回滚
+                        g.adj[u, v] = 1  # 回滚，直接恢复无需检测
 
         return g
 
