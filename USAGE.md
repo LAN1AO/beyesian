@@ -129,7 +129,6 @@ python3 main.py --model alarm --batch 30 --workers 8 \
 | `batch_<seed>/` | 各次运行的独立输出目录 |
 | `combined_pareto.png` | 全部运行的 Pareto 前沿汇总图 |
 | `combined_pareto_acyclic.png` | 全部运行的无环解 Pareto 前沿汇总图 |
-| `global_pareto.csv` | 全局非支配前沿解集 |
 
 ## 编程接口
 

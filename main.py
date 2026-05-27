@@ -405,7 +405,6 @@ def _run_batch(args):
     # ── 收集结果 ──────────────────────────────────────────
     print("收集结果...")
     results = []
-    all_pareto_f = []
     for d in output_dirs:
         pkl_path = os.path.join(d, "result.pkl")
         if not os.path.exists(pkl_path):
@@ -419,7 +418,6 @@ def _run_batch(args):
             "pareto_graphs": r.pareto_graphs,
             "runtime": r.runtime,
         })
-        all_pareto_f.append(r.pareto_f.copy())
         print(f"  {os.path.basename(d)}: {len(r.pareto_f)} 个 Pareto 解, "
               f"耗时 {r.runtime:.0f}s")
 
@@ -432,20 +430,8 @@ def _run_batch(args):
     print(f"  Pareto 解数: 均值 {np.mean(pareto_sizes):.1f}, "
           f"最小 {np.min(pareto_sizes)}, 最大 {np.max(pareto_sizes)}")
 
-    # ── 全局非支配前沿 CSV ───────────────────────────────
-    all_f = np.vstack(all_pareto_f)
-    global_mask = _non_dominated_mask(all_f)
-    global_pf = all_f[global_mask]
-    order = np.argsort(global_pf[:, 0])
-    global_pf = global_pf[order]
-
-    csv_path = os.path.join(args.output, "global_pareto.csv")
-    np.savetxt(csv_path, global_pf, delimiter=",",
-               header="mdl,sdiff", comments="", fmt="%.4f,%.0f")
-    print(f"全局 Pareto 前沿 CSV: {csv_path} ({len(global_pf)} 个解)")
-
     # ── 汇总绘图 ──────────────────────────────────────────
-    _plot_batch_combined(results, global_pf, args.output, args.model,
+    _plot_batch_combined(results, args.output, args.model,
                          args.pop_size, args.generations)
 
     acyclic_path = os.path.join(args.output, "combined_pareto_acyclic.png")
@@ -458,7 +444,6 @@ def _run_batch(args):
     print(f"\n全部完成! 输出目录: {args.output}")
     print(f"  combined_pareto.png — 全量汇总图")
     print(f"  combined_pareto_acyclic.png — 无环解汇总图")
-    print(f"  global_pareto.csv — 全局非支配前沿")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -483,12 +468,6 @@ def _peek_n_nodes(bif_path: str | None, model_name: str,
         return len(load_model(name).nodes())
 
 
-def _non_dominated_mask(f_values: np.ndarray) -> np.ndarray:
-    """返回非支配解的布尔掩码（最小化两个目标）。"""
-    from src.decomposition import non_dominated_sort
-    return non_dominated_sort(f_values)
-
-
 def _has_networkx() -> bool:
     """检查 networkx 是否可用。"""
     try:
@@ -498,10 +477,9 @@ def _has_networkx() -> bool:
         return False
 
 
-def _plot_batch_combined(results: list[dict], global_pf: np.ndarray,
-                         output_dir: str, model: str,
+def _plot_batch_combined(results: list[dict], output_dir: str, model: str,
                          pop_size: int, generations: int) -> None:
-    """绘制 batch 全量汇总图（各次运行 + 全局前沿）。"""
+    """绘制 batch 全量汇总图（全部前沿点）。"""
     import matplotlib
     import matplotlib.pyplot as plt
     matplotlib.use("Agg")
@@ -521,19 +499,6 @@ def _plot_batch_combined(results: list[dict], global_pf: np.ndarray,
             c=[colors[i % 20]], s=25, alpha=0.4,
             edgecolors="none", label=r["name"],
         )
-
-    ax.plot(global_pf[:, 0], global_pf[:, 1],
-            "k-", linewidth=2, alpha=0.7, label="Global Pareto Front")
-    ax.scatter(global_pf[:, 0], global_pf[:, 1],
-               c="black", s=50, marker="o", alpha=0.9,
-               edgecolors="white", linewidth=0.5, zorder=5)
-
-    zero_sdiff = global_pf[global_pf[:, 1] == 0]
-    if len(zero_sdiff) > 0:
-        ax.scatter([zero_sdiff[0, 0]], [0],
-                   c="red", s=150, marker="*",
-                   edgecolors="darkred", linewidth=1,
-                   label="Prior Network", zorder=10)
 
     ax.set_xlabel("MDL Score", fontsize=13)
     ax.set_ylabel("Structural Symmetric Difference", fontsize=13)

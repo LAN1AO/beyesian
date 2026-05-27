@@ -162,16 +162,10 @@ def plot_combined_acyclic(
 ) -> plt.Figure:
     """绘制 batch 多运行汇总的无环解 Pareto 前沿图。
 
-    每个运行的 acyclic 解以半透明显示，全局非支配前沿高亮。
-
-    Args:
-        batch_results: 列表，每项含 'pareto_f' (n,2) 和 'pareto_graphs' 列表
-        title: 图表标题
-        save_path: 若给定，保存图表到此路径
+    每个运行的 acyclic 解以半透明散点显示。
     """
     fig, ax = plt.subplots(figsize=(10, 8))
 
-    all_acyclic_f = []
     n_results = len(batch_results)
     if n_results <= 20:
         colors = plt.cm.tab20(np.linspace(0, 1, max(n_results, 1)))
@@ -184,42 +178,10 @@ def plot_combined_acyclic(
         mask = [g.count_cycles() == 0 for g in graphs]
         f_acyclic = f[mask]
         if len(f_acyclic) > 0:
-            all_acyclic_f.append(f_acyclic)
             ax.scatter(
                 f_acyclic[:, 0], f_acyclic[:, 1],
                 c=[colors[i % 20]], s=25, alpha=0.4,
                 edgecolors="none", label=r.get("name", ""),
-            )
-
-    if all_acyclic_f:
-        # 全局 acyclic 非支配前沿
-        all_f = np.vstack(all_acyclic_f)
-        n_total = sum(len(r["pareto_f"]) for r in batch_results)
-        from src.decomposition import non_dominated_sort
-        mask_nd = non_dominated_sort(all_f)
-        global_pf = all_f[mask_nd]
-        order = np.argsort(global_pf[:, 0])
-        global_pf = global_pf[order]
-
-        ax.plot(
-            global_pf[:, 0], global_pf[:, 1],
-            "k-", linewidth=2, alpha=0.7,
-            label=f"Global Acyclic PF (n={len(global_pf)} / total {n_total})",
-        )
-        ax.scatter(
-            global_pf[:, 0], global_pf[:, 1],
-            c="black", s=50, marker="o", alpha=0.9,
-            edgecolors="white", linewidth=0.5, zorder=5,
-        )
-
-        # 先验网络 (Sdiff=0)
-        zero_sdiff = global_pf[global_pf[:, 1] == 0]
-        if len(zero_sdiff) > 0:
-            ax.scatter(
-                [zero_sdiff[0, 0]], [0],
-                c="red", s=150, marker="*",
-                edgecolors="darkred", linewidth=1,
-                label="Prior Network", zorder=10,
             )
 
     ax.set_xlabel("MDL Score", fontsize=13)
