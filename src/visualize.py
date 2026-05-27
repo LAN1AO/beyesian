@@ -194,22 +194,9 @@ def plot_combined_acyclic(
     if all_acyclic_f:
         # 全局 acyclic 非支配前沿
         all_f = np.vstack(all_acyclic_f)
-        n_all = len(all_f)
         n_total = sum(len(r["pareto_f"]) for r in batch_results)
-        # 非支配排序
-        mask_nd = np.ones(n_all, dtype=bool)
-        for i in range(n_all):
-            if not mask_nd[i]:
-                continue
-            for j in range(n_all):
-                if i == j or not mask_nd[j]:
-                    continue
-                if (all_f[j, 0] <= all_f[i, 0]
-                        and all_f[j, 1] <= all_f[i, 1]
-                        and (all_f[j, 0] < all_f[i, 0]
-                             or all_f[j, 1] < all_f[i, 1])):
-                    mask_nd[i] = False
-                    break
+        from src.decomposition import non_dominated_sort
+        mask_nd = non_dominated_sort(all_f)
         global_pf = all_f[mask_nd]
         order = np.argsort(global_pf[:, 0])
         global_pf = global_pf[order]

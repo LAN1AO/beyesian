@@ -305,22 +305,26 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
                   data_file: str, args) -> str:
     """在子进程中执行一次单运行。"""
     cmd = [
-        sys.executable, __file__,
+        sys.executable, os.path.abspath(__file__),
         "--model", args.model,
         "--prior-file", prior_file,
         "--data-file", data_file,
         "--pop-size", str(args.pop_size),
         "--generations", str(args.generations),
         "--max-sdiff", str(args.max_sdiff),
+        "--max-cycle", str(args.max_cycle),
+        "--mdl-penalty", str(args.mdl_penalty),
+        "--neighbors", str(args.neighbors),
+        "--prob-neighbor", str(args.prob_neighbor),
+        "--max-replace", str(args.max_replace),
+        "--mutation-prob", str(args.mutation_prob),
         "--seed", str(seed),
         "--output", output_dir,
         "--no-plot",
     ]
     if args.max_parents is not None:
-        cmd.insert(cmd.index("--max-sdiff") + 2,
-                   "--max-parents")
-        cmd.insert(cmd.index("--max-parents") + 1,
-                   str(args.max_parents))
+        cmd.append("--max-parents")
+        cmd.append(str(args.max_parents))
 
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
     return output_dir
@@ -344,10 +348,15 @@ def _run_batch(args):
         print("预生成共享先验网络和数据...")
         os.makedirs(shared_dir, exist_ok=True)
 
-        prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(
-            args.model, max_forbidden_cycle=args.max_cycle
-        )
-        prior_graph = PriorNetwork.perturb(prior_graph, n_changes=6, seed=9999)
+        if args.bif:
+            prior_graph, node_names, n_states = PriorNetwork.from_bif(
+                args.bif, max_forbidden_cycle=args.max_cycle
+            )
+        else:
+            prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(
+                args.model, max_forbidden_cycle=args.max_cycle
+            )
+            prior_graph = PriorNetwork.perturb(prior_graph, n_changes=6, seed=9999)
         with open(prior_file, "wb") as f:
             pickle.dump((prior_graph, node_names, n_states), f)
         print(f"  共享先验: {len(node_names)} 节点, "
@@ -476,21 +485,8 @@ def _peek_n_nodes(bif_path: str | None, model_name: str,
 
 def _non_dominated_mask(f_values: np.ndarray) -> np.ndarray:
     """返回非支配解的布尔掩码（最小化两个目标）。"""
-    n = len(f_values)
-    mask = np.ones(n, dtype=bool)
-    for i in range(n):
-        if not mask[i]:
-            continue
-        for j in range(n):
-            if i == j or not mask[j]:
-                continue
-            if (f_values[j, 0] <= f_values[i, 0]
-                    and f_values[j, 1] <= f_values[i, 1]
-                    and (f_values[j, 0] < f_values[i, 0]
-                         or f_values[j, 1] < f_values[i, 1])):
-                mask[i] = False
-                break
-    return mask
+    from src.decomposition import non_dominated_sort
+    return non_dominated_sort(f_values)
 
 
 def _has_networkx() -> bool:
