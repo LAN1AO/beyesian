@@ -172,6 +172,14 @@ class DirectedGraph:
     def count_cycles(self) -> int:
         return sum(1 for _ in self._iter_cycles())
 
+    def max_cycle_length(self) -> int:
+        """返回图中最长环的长度，若无环则返回 0。"""
+        max_len = 0
+        for length, _ in self._iter_cycles():
+            if length > max_len:
+                max_len = length
+        return max_len
+
     def has_cycle_with_length(self, length: int) -> bool:
         for clen, _ in self._iter_cycles(max_length=length):
             if clen == length:

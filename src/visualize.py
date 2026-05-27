@@ -80,6 +80,175 @@ def plot_pareto_front(
     return fig
 
 
+def plot_acyclic_pareto_front(
+    pareto_f: "np.ndarray",
+    pareto_graphs: list,
+    title: str = "Acyclic Pareto Front",
+    save_path: str | None = None,
+    original_pos: tuple[float, float] | None = None,
+) -> plt.Figure:
+    """绘制仅包含无环解的 Pareto 前沿散点图。
+
+    Args:
+        pareto_f: (n, 2) 目标值数组
+        pareto_graphs: 图列表
+        title: 图表标题
+        save_path: 若给定，保存图表到此路径
+        original_pos: (mdl, sdiff) 原始 bnlearn 网络位置
+    """
+    # 过滤无环解
+    mask = [g.count_cycles() == 0 for g in pareto_graphs]
+    f_acyclic = pareto_f[mask]
+    n_total = len(pareto_graphs)
+    n_acyclic = len(f_acyclic)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # 灰色背景：全部解（含环）
+    ax.scatter(
+        pareto_f[:, 0], pareto_f[:, 1],
+        c="lightgray", s=30, alpha=0.4,
+        edgecolors="gray", linewidth=0.3,
+        label=f"All Solutions (n={n_total})",
+    )
+
+    # 蓝色：无环解
+    if n_acyclic > 0:
+        ax.scatter(
+            f_acyclic[:, 0], f_acyclic[:, 1],
+            c="steelblue", s=50, alpha=0.9,
+            edgecolors="navy", linewidth=0.8,
+            label=f"Acyclic Solutions (n={n_acyclic})",
+            zorder=3,
+        )
+
+    # 先验网络 (Sdiff=0)，从无环解中找
+    zero_sdiff = f_acyclic[f_acyclic[:, 1] == 0] if n_acyclic > 0 else []
+    if len(zero_sdiff) > 0:
+        ax.scatter(
+            [zero_sdiff[0, 0]], [0],
+            c="red", s=100, marker="*",
+            edgecolors="darkred", linewidth=1,
+            label="Prior Network", zorder=5,
+        )
+
+    # 原始 bnlearn 网络
+    if original_pos is not None:
+        ax.scatter(
+            [original_pos[0]], [original_pos[1]],
+            c="green", s=100, marker="D",
+            edgecolors="darkgreen", linewidth=1,
+            label="Original BN", zorder=5,
+        )
+
+    ax.set_xlabel("MDL Score", fontsize=12)
+    ax.set_ylabel("Structural Symmetric Difference", fontsize=12)
+    ax.set_title(title, fontsize=14)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Acyclic Pareto front chart saved to: {save_path}")
+
+    return fig
+
+
+def plot_combined_acyclic(
+    batch_results: list[dict],
+    title: str = "Combined Acyclic Pareto Front",
+    save_path: str | None = None,
+) -> plt.Figure:
+    """绘制 batch 多运行汇总的无环解 Pareto 前沿图。
+
+    每个运行的 acyclic 解以半透明显示，全局非支配前沿高亮。
+
+    Args:
+        batch_results: 列表，每项含 'pareto_f' (n,2) 和 'pareto_graphs' 列表
+        title: 图表标题
+        save_path: 若给定，保存图表到此路径
+    """
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    all_acyclic_f = []
+    n_results = len(batch_results)
+    if n_results <= 20:
+        colors = plt.cm.tab20(np.linspace(0, 1, max(n_results, 1)))
+    else:
+        colors = plt.cm.tab20(np.arange(n_results) % 20 / 20.0)
+
+    for i, r in enumerate(batch_results):
+        f = r["pareto_f"]
+        graphs = r["pareto_graphs"]
+        mask = [g.count_cycles() == 0 for g in graphs]
+        f_acyclic = f[mask]
+        if len(f_acyclic) > 0:
+            all_acyclic_f.append(f_acyclic)
+            ax.scatter(
+                f_acyclic[:, 0], f_acyclic[:, 1],
+                c=[colors[i % 20]], s=25, alpha=0.4,
+                edgecolors="none", label=r.get("name", ""),
+            )
+
+    if all_acyclic_f:
+        # 全局 acyclic 非支配前沿
+        all_f = np.vstack(all_acyclic_f)
+        n_all = len(all_f)
+        n_total = sum(len(r["pareto_f"]) for r in batch_results)
+        # 非支配排序
+        mask_nd = np.ones(n_all, dtype=bool)
+        for i in range(n_all):
+            if not mask_nd[i]:
+                continue
+            for j in range(n_all):
+                if i == j or not mask_nd[j]:
+                    continue
+                if (all_f[j, 0] <= all_f[i, 0]
+                        and all_f[j, 1] <= all_f[i, 1]
+                        and (all_f[j, 0] < all_f[i, 0]
+                             or all_f[j, 1] < all_f[i, 1])):
+                    mask_nd[i] = False
+                    break
+        global_pf = all_f[mask_nd]
+        order = np.argsort(global_pf[:, 0])
+        global_pf = global_pf[order]
+
+        ax.plot(
+            global_pf[:, 0], global_pf[:, 1],
+            "k-", linewidth=2, alpha=0.7,
+            label=f"Global Acyclic PF (n={len(global_pf)} / total {n_total})",
+        )
+        ax.scatter(
+            global_pf[:, 0], global_pf[:, 1],
+            c="black", s=50, marker="o", alpha=0.9,
+            edgecolors="white", linewidth=0.5, zorder=5,
+        )
+
+        # 先验网络 (Sdiff=0)
+        zero_sdiff = global_pf[global_pf[:, 1] == 0]
+        if len(zero_sdiff) > 0:
+            ax.scatter(
+                [zero_sdiff[0, 0]], [0],
+                c="red", s=150, marker="*",
+                edgecolors="darkred", linewidth=1,
+                label="Prior Network", zorder=10,
+            )
+
+    ax.set_xlabel("MDL Score", fontsize=13)
+    ax.set_ylabel("Structural Symmetric Difference", fontsize=13)
+    ax.set_title(title, fontsize=14)
+    ax.legend(fontsize=10, loc="upper right")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Combined acyclic Pareto front saved to: {save_path}")
+
+    return fig
+
+
 def plot_convergence(
     result,
     title: str = "Convergence History",
