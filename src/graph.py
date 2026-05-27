@@ -115,6 +115,20 @@ class DirectedGraph:
 
     # ── 环检测 ────────────────────────────────────────────────
 
+    def _would_create_any_cycle(self, u: int, v: int) -> bool:
+        """检查添加 u→v 是否会形成任意长度的环（无界 DFS）。"""
+        visited = {v}
+        stack = [v]
+        while stack:
+            node = stack.pop()
+            for child in self.get_children(node):
+                if child == u:
+                    return True
+                if child not in visited:
+                    visited.add(child)
+                    stack.append(child)
+        return False
+
     def _would_create_cycle(self, u: int, v: int) -> int | None:
         """检查添加 u→v 是否会形成环以及环的长度。
 

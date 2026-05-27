@@ -130,7 +130,8 @@ class PriorNetwork:
             op = rng.choice(ops)
             if op == "add":
                 u, v = rng.randrange(n), rng.randrange(n)
-                g.add_edge(u, v)
+                if not g._would_create_any_cycle(u, v):
+                    g.add_edge(u, v)
             elif op == "remove":
                 edges = g.get_edges()
                 if edges:
@@ -140,7 +141,11 @@ class PriorNetwork:
                 edges = g.get_edges()
                 if edges:
                     u, v = rng.choice(edges)
-                    g.reverse_edge(u, v)
+                    g.remove_edge(u, v)
+                    if not g._would_create_any_cycle(v, u):
+                        g.add_edge(v, u)
+                    else:
+                        g.add_edge(u, v)  # 回滚
 
         return g
 
