@@ -48,6 +48,8 @@ python3 main.py --model alarm --batch 20 \
 | `--prob-neighbor` | `0.9` | 从邻居选父代的概率 |
 | `--max-replace` | `2` | 每个子代最多替换的邻居数 nr |
 | `--mutation-prob` | `0.3` | 变异概率 |
+| `--mutation-ops-min` | `2` | 每次变异最少边操作次数 |
+| `--mutation-ops-max` | `6` | 每次变异最多边操作次数 |
 
 ### 约束
 | 参数 | 默认值 | 说明 |

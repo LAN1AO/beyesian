@@ -104,6 +104,14 @@ def main():
         "--mutation-prob", type=float, default=0.3,
         help="变异概率 (默认: 0.3)",
     )
+    parser.add_argument(
+        "--mutation-ops-min", type=int, default=2,
+        help="每次变异最少边操作次数 (默认: 2)",
+    )
+    parser.add_argument(
+        "--mutation-ops-max", type=int, default=6,
+        help="每次变异最多边操作次数 (默认: 6)",
+    )
 
     # 输出
     parser.add_argument(
@@ -198,6 +206,8 @@ def _run_single(args):
         prob_neighbor_mating=args.prob_neighbor,
         max_replacements=args.max_replace,
         mutation_prob=args.mutation_prob,
+        mutation_ops_min=args.mutation_ops_min,
+        mutation_ops_max=args.mutation_ops_max,
         data=data,
         output_dir=args.output,
         random_seed=args.seed,
@@ -317,6 +327,8 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
         "--prob-neighbor", str(args.prob_neighbor),
         "--max-replace", str(args.max_replace),
         "--mutation-prob", str(args.mutation_prob),
+        "--mutation-ops-min", str(args.mutation_ops_min),
+        "--mutation-ops-max", str(args.mutation_ops_max),
         "--seed", str(seed),
         "--output", output_dir,
         "--no-plot",
