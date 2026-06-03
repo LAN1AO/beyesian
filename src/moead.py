@@ -17,7 +17,6 @@ from src.graph import DirectedGraph
 from src.operators import crossover, mutate, select_parents
 from src.population import generate_initial_population
 from src.score import MDLScore, StructuralDiffScore
-from src.score_cache import CompositeScore
 
 
 class MOEADResult:
@@ -82,7 +81,6 @@ class MOEAD:
         self.mdl_score = MDLScore(data, config.n_states,
                                    penalty_scale=config.mdl_penalty_scale)
         self.sdiff_score = StructuralDiffScore(prior_graph)
-        self.cs = CompositeScore(self.mdl_score, self.sdiff_score)
 
         # 生成权重向量和邻居结构
         H = config.n_weight_vectors - 1  # Das-Dennis 分区数
@@ -111,16 +109,19 @@ class MOEAD:
     def _evaluate(self, graph: DirectedGraph) -> tuple[np.ndarray, dict[int, tuple[float, float]]]:
         """计算图的 (mdl, sdiff) 目标向量和逐节点评分缓存。
 
-        Returns:
-            (f_values, node_scores) 其中 f_values=(mdl, sdiff),
-            node_scores={node: (mdl_val, sdiff_val)}
+        单次遍历所有节点，MDL 计算走 hash 缓存（同一父集只算一次）。
         """
-        mdl, sd = self.cs.full_evaluate(graph)
-        # 读取 full_evaluate 写入的逐节点缓存
-        scores = {}
+        scores: dict[int, tuple[float, float]] = {}
+        total_mdl = 0.0
+        total_sdiff = 0.0
         for node in range(self.n_nodes):
-            scores[node] = (self.cs.get_node_mdl(node), self.cs.get_node_sdiff(node))
-        return np.array([mdl, sd]), scores
+            parents = graph.get_parents(node)
+            m = self.mdl_score.score_node(node, parents)
+            s = self.sdiff_score.score_node(node, parents)
+            scores[node] = (m, s)
+            total_mdl += m
+            total_sdiff += s
+        return np.array([total_mdl, total_sdiff]), scores
 
     def run(self) -> MOEADResult:
         """执行 MOEA/D 主循环。"""
@@ -151,7 +152,8 @@ class MOEAD:
                 child = crossover(
                     self.population[k],
                     self.population[l],
-                    self.cs,
+                    self.mdl_score,
+                    self.sdiff_score,
                     self.weights[i],
                     self.ideal,
                     nadir,

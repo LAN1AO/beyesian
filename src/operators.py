@@ -10,7 +10,8 @@ from src.graph import DirectedGraph
 def crossover(
     parent1: DirectedGraph,
     parent2: DirectedGraph,
-    score,
+    mdl_score,
+    sdiff_score,
     weight: np.ndarray,
     ideal: np.ndarray,
     nadir: np.ndarray,
@@ -26,7 +27,8 @@ def crossover(
 
     Args:
         parent1, parent2: 两个父代图
-        score: CompositeScore 实例（仅用于缓存未命中时的兜底）
+        mdl_score: MDLScore 实例（用于缓存未命中时的兜底计算）
+        sdiff_score: StructuralDiffScore 实例
         weight: 当前子问题的权重向量 (n_objectives,)
         ideal: 当前 ideal point
         nadir: 当前 nadir point
@@ -60,16 +62,18 @@ def crossover(
         if set(p1_parents) == set(p2_parents):
             selected = p1_parents
         else:
-            # 优先使用缓存评分，否则实时计算
+            # 优先使用缓存评分，否则实时计算（走 MDL hash 缓存）
             if parent1_scores is not None and node in parent1_scores:
                 mdl1, sd1 = parent1_scores[node]
             else:
-                mdl1, sd1 = score.node_pair_score(parent1, node, p1_parents)
+                mdl1 = mdl_score.score_node(node, p1_parents)
+                sd1 = sdiff_score.score_node(node, p1_parents)
 
             if parent2_scores is not None and node in parent2_scores:
                 mdl2, sd2 = parent2_scores[node]
             else:
-                mdl2, sd2 = score.node_pair_score(parent2, node, p2_parents)
+                mdl2 = mdl_score.score_node(node, p2_parents)
+                sd2 = sdiff_score.score_node(node, p2_parents)
 
             # 归一化切比雪夫聚合: g = max_i { λ_i * |f_i - z*_i| / range_i }
             f1 = np.array([mdl1, sd1])
