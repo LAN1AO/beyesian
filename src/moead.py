@@ -82,6 +82,9 @@ class MOEAD:
                                    penalty_scale=config.mdl_penalty_scale)
         self.sdiff_score = StructuralDiffScore(prior_graph)
 
+        # 组合评分缓存: (node, frozenset(parents)) → (mdl, sdiff)
+        self._score_cache: dict[tuple, tuple[float, float]] = {}
+
         # 生成权重向量和邻居结构
         H = config.n_weight_vectors - 1  # Das-Dennis 分区数
         self.weights = das_dennis_weights(2, H)
@@ -109,15 +112,22 @@ class MOEAD:
     def _evaluate(self, graph: DirectedGraph) -> tuple[np.ndarray, dict[int, tuple[float, float]]]:
         """计算图的 (mdl, sdiff) 目标向量和逐节点评分缓存。
 
-        单次遍历所有节点，MDL 计算走 hash 缓存（同一父集只算一次）。
+        优先从组合缓存 (node, frozenset(parents)) → (mdl, sdiff) 读取；
+        未命中时计算两者并存入。
         """
         scores: dict[int, tuple[float, float]] = {}
         total_mdl = 0.0
         total_sdiff = 0.0
         for node in range(self.n_nodes):
             parents = graph.get_parents(node)
-            m = self.mdl_score.score_node(node, parents)
-            s = self.sdiff_score.score_node(node, parents)
+            key = (node, frozenset(parents))
+            cached = self._score_cache.get(key)
+            if cached is not None:
+                m, s = cached
+            else:
+                m = self.mdl_score.score_node(node, parents)
+                s = self.sdiff_score.score_node(node, parents)
+                self._score_cache[key] = (m, s)
             scores[node] = (m, s)
             total_mdl += m
             total_sdiff += s
@@ -161,6 +171,7 @@ class MOEAD:
                     rng,
                     parent1_scores=self.node_scores[k],
                     parent2_scores=self.node_scores[l],
+                    score_cache=self._score_cache,
                 )
 
                 # 3. 变异

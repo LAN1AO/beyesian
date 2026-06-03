@@ -33,28 +33,11 @@ class MDLScore:
         self.n_samples = data.shape[0]
         self._log2_m = np.log2(self.n_samples)
         self._penalty_scale = penalty_scale
-        # 全局 hash 缓存: (node, frozenset(parents)) → MDL 值
-        self._cache: dict[tuple, float] = {}
-        self._cache_hits = 0
-        self._cache_misses = 0
 
     def score_node(self, node: int, parents: list[int]) -> float:
-        """计算单个节点在给定父集下的 MDL 评分分量。
-
-        优先从全局 hash 缓存读取；缓存未命中时计算并存入。
-        """
-        key = (node, frozenset(parents))
-        cached = self._cache.get(key)
-        if cached is not None:
-            self._cache_hits += 1
-            return cached
-        self._cache_misses += 1
-        # 使用固定排序，确保同一父集产生相同的编码和结果
-        sorted_parents = sorted(parents)
-        parent_configs = self._encode_parent_configs(node, sorted_parents)
-        result = self._score_from_configs(node, sorted_parents, parent_configs)
-        self._cache[key] = result
-        return result
+        """计算单个节点在给定父集下的 MDL 评分分量。"""
+        parent_configs = self._encode_parent_configs(node, parents)
+        return self._score_from_configs(node, parents, parent_configs)
 
     def score_graph(self, graph) -> float:
         """计算整个图的 MDL 评分。"""

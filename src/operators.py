@@ -19,6 +19,7 @@ def crossover(
     rng: random.Random | None = None,
     parent1_scores: dict[int, tuple[float, float]] | None = None,
     parent2_scores: dict[int, tuple[float, float]] | None = None,
+    score_cache: dict | None = None,
 ) -> DirectedGraph:
     """逐节点父集比较交叉算子。
 
@@ -36,6 +37,7 @@ def crossover(
         rng: 随机数生成器
         parent1_scores: 父代1的 {node: (mdl, sdiff)} 缓存（可选）
         parent2_scores: 父代2的 {node: (mdl, sdiff)} 缓存（可选）
+        score_cache: 组合缓存 (node, frozenset(parents)) → (mdl, sdiff)（可选）
 
     Returns:
         子代图
@@ -62,18 +64,30 @@ def crossover(
         if set(p1_parents) == set(p2_parents):
             selected = p1_parents
         else:
-            # 优先使用缓存评分，否则实时计算（走 MDL hash 缓存）
+            # 优先使用缓存评分，否则实时计算并存入组合缓存
             if parent1_scores is not None and node in parent1_scores:
                 mdl1, sd1 = parent1_scores[node]
             else:
-                mdl1 = mdl_score.score_node(node, p1_parents)
-                sd1 = sdiff_score.score_node(node, p1_parents)
+                key = (node, frozenset(p1_parents))
+                if score_cache is not None and key in score_cache:
+                    mdl1, sd1 = score_cache[key]
+                else:
+                    mdl1 = mdl_score.score_node(node, p1_parents)
+                    sd1 = sdiff_score.score_node(node, p1_parents)
+                    if score_cache is not None:
+                        score_cache[key] = (mdl1, sd1)
 
             if parent2_scores is not None and node in parent2_scores:
                 mdl2, sd2 = parent2_scores[node]
             else:
-                mdl2 = mdl_score.score_node(node, p2_parents)
-                sd2 = sdiff_score.score_node(node, p2_parents)
+                key = (node, frozenset(p2_parents))
+                if score_cache is not None and key in score_cache:
+                    mdl2, sd2 = score_cache[key]
+                else:
+                    mdl2 = mdl_score.score_node(node, p2_parents)
+                    sd2 = sdiff_score.score_node(node, p2_parents)
+                    if score_cache is not None:
+                        score_cache[key] = (mdl2, sd2)
 
             # 归一化切比雪夫聚合: g = max_i { λ_i * |f_i - z*_i| / range_i }
             f1 = np.array([mdl1, sd1])
