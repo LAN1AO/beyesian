@@ -54,7 +54,6 @@ python3 main.py --model alarm --batch 20 \
 ### 约束
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--max-cycle` | `floor(sqrt(n_nodes))` | 禁止此长度及以下的环，允许更长的环 |
 | `--max-parents` | 无限制 | 每个节点最大父节点数 |
 | `--max-sdiff` | `15` | 结构对称差总和上限 |
 | `--mdl-penalty` | `1.0` | MDL 惩罚项缩放 (1.0=标准BIC，越小惩罚越轻) |
@@ -85,9 +84,6 @@ python3 main.py --model alarm --pop-size 100 --generations 500 \
 # 使用自定义 BIF 先验
 python3 main.py --bif ./data/my_network.bif --generations 200
 
-# 自定义环限制 (禁止 <=5 的环)
-python3 main.py --model asia --max-cycle 5
-
 # 轻惩罚 (鼓励更复杂的图)
 python3 main.py --model asia --mdl-penalty 0.5
 ```
@@ -114,7 +110,8 @@ python3 main.py --model alarm --batch 30 --workers 8 \
 | 文件 | 说明 |
 |------|------|
 | `result.pkl` | 完整 MOEADResult 对象 |
-| `pareto_front.csv` | Pareto 前沿解 (index,edges,cycles,max_cycle_len,mdl,sdiff) |
+| `pareto_front.csv` | Pareto 前沿解 (index,edges,mdl,sdiff) |
+| `params.json` | 本次实验的完整参数记录 |
 | `pareto_front.png` | Pareto 前沿散点图 (全部解 + 先验/原始网络标记) |
 | `pareto_front_acyclic.png` | 仅无环解的 Pareto 前沿图 |
 | `convergence.png` | Pareto 解数量收敛曲线 |
@@ -149,7 +146,7 @@ data, _, _ = PriorNetwork.generate_data("asia", n_samples=500, seed=42)
 # 配置
 config = MOEADConfig(
     n_nodes=len(node_names), n_states=n_states,
-    max_forbidden_cycle=3, max_symmetric_diff=15,
+    max_symmetric_diff=15,
     n_weight_vectors=50, n_neighbors=10, n_generations=200,
     data=data, random_seed=42,
 )

@@ -10,13 +10,12 @@ class PriorNetwork:
 
     @classmethod
     def from_pgmpy_model(
-        cls, model_name: str, max_forbidden_cycle: int = 3
+        cls, model_name: str,
     ) -> tuple[DirectedGraph, list[str], list[int]]:
         """从 pgmpy 内置 bnlearn 网络加载先验网络。
 
         Args:
             model_name: bnlearn 网络名称，如 'asia', 'alarm', 'sachs' 等
-            max_forbidden_cycle: 禁止的环长度上限（禁止 ≤n 的环）
 
         Returns:
             (graph, node_names, n_states)
@@ -40,19 +39,18 @@ class PriorNetwork:
         ]
 
         graph = DirectedGraph.from_edges(
-            len(node_names), edges, max_forbidden_cycle
+            len(node_names), edges
         )
         return graph, node_names, n_states
 
     @classmethod
     def from_bif(
-        cls, path: str, max_forbidden_cycle: int = 3
+        cls, path: str,
     ) -> tuple[DirectedGraph, list[str], list[int]]:
         """从 BIF 文件加载先验网络。
 
         Args:
             path: BIF 文件路径
-            max_forbidden_cycle: 禁止的环长度上限（禁止 ≤n 的环）
 
         Returns:
             (graph, node_names, n_states)
@@ -73,7 +71,7 @@ class PriorNetwork:
         ]
 
         graph = DirectedGraph.from_edges(
-            len(node_names), edges, max_forbidden_cycle
+            len(node_names), edges
         )
         return graph, node_names, n_states
 
@@ -84,7 +82,6 @@ class PriorNetwork:
         edges: list[tuple[int, int]],
         n_states: list[int],
         node_names: list[str] | None = None,
-        max_forbidden_cycle: int = 3,
     ) -> tuple[DirectedGraph, list[str], list[int]]:
         """从边列表构造先验网络。
 
@@ -93,14 +90,13 @@ class PriorNetwork:
             edges: 边列表
             n_states: 每个节点的取值数
             node_names: 节点名称（可选，默认使用索引字符串）
-            max_forbidden_cycle: 禁止的环长度上限（禁止 ≤n 的环）
 
         Returns:
             (graph, node_names, n_states)
         """
         if node_names is None:
             node_names = [str(i) for i in range(n_nodes)]
-        graph = DirectedGraph.from_edges(n_nodes, edges, max_forbidden_cycle)
+        graph = DirectedGraph.from_edges(n_nodes, edges)
         return graph, node_names, n_states
 
     @staticmethod
@@ -130,7 +126,7 @@ class PriorNetwork:
             op = rng.choice(ops)
             if op == "add":
                 u, v = rng.randrange(n), rng.randrange(n)
-                if not g._would_create_any_cycle(u, v):
+                if not g._would_create_cycle(u, v):
                     g.add_edge(u, v)
             elif op == "remove":
                 edges = g.get_edges()
@@ -142,7 +138,7 @@ class PriorNetwork:
                 if edges:
                     u, v = rng.choice(edges)
                     g.remove_edge(u, v)
-                    if not g._would_create_any_cycle(v, u):
+                    if not g._would_create_cycle(v, u):
                         g.add_edge(v, u)
                     else:
                         g.adj[u, v] = 1  # 回滚，直接恢复无需检测

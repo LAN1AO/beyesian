@@ -64,11 +64,6 @@ def main():
 
     # MOEA/D 参数
     parser.add_argument(
-        "--max-cycle", type=int, default=None,
-        help="禁止此长度及以下的环，允许更长的环 "
-             "(默认: floor(sqrt(n_nodes)))",
-    )
-    parser.add_argument(
         "--max-parents", type=int, default=None,
         help="每个节点最大父节点数 (默认: 不限制)",
     )
@@ -153,12 +148,6 @@ def _run_single(args):
     """单次 MOEA/D 运行。"""
     os.makedirs(args.output, exist_ok=True)
 
-    # 若未指定 max_cycle，根据节点数计算默认值
-    if args.max_cycle is None:
-        n_peek = _peek_n_nodes(args.bif, args.model, args.prior_file)
-        args.max_cycle = max(2, int(np.sqrt(n_peek)))
-        print(f"  max_cycle 未指定，自动设为 floor(sqrt({n_peek})) = {args.max_cycle}")
-
     # ── 1. 加载先验网络 ──────────────────────────────────────
     print(f"[1/5] 加载先验网络...")
     original_graph = None
@@ -167,13 +156,9 @@ def _run_single(args):
             prior_graph, node_names, n_states = pickle.load(f)
         print(f"  从文件加载先验: {args.prior_file}")
     elif args.bif:
-        prior_graph, node_names, n_states = PriorNetwork.from_bif(
-            args.bif, max_forbidden_cycle=args.max_cycle
-        )
+        prior_graph, node_names, n_states = PriorNetwork.from_bif(args.bif)
     else:
-        prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(
-            args.model, max_forbidden_cycle=args.max_cycle
-        )
+        prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(args.model)
         original_graph = prior_graph.copy()
         prior_graph = PriorNetwork.perturb(prior_graph, n_changes=6, seed=args.seed)
         print(f"  原始边数: {len(original_graph.get_edges())}, "
@@ -196,7 +181,6 @@ def _run_single(args):
     config = MOEADConfig(
         n_nodes=len(node_names),
         n_states=n_states,
-        max_forbidden_cycle=args.max_cycle,
         max_parents=args.max_parents,
         mdl_penalty_scale=args.mdl_penalty,
         max_symmetric_diff=args.max_sdiff,
@@ -226,12 +210,11 @@ def _run_single(args):
 
     # 打印 Pareto 前沿
     print(f"\n  Pareto 前沿:")
-    print(f"  {'#':>3}  {'Edges':>5}  {'Cycles':>6}  {'MDL':>12}  {'Sdiff':>5}")
-    print(f"  {'-' * 40}")
+    print(f"  {'#':>3}  {'Edges':>5}  {'MDL':>12}  {'Sdiff':>5}")
+    print(f"  {'-' * 36}")
     for i, (g, f) in enumerate(zip(result.pareto_graphs, result.pareto_f)):
         n_edges = int(np.sum(g.adj))
-        n_cycles = g.count_cycles()
-        print(f"  {i:>3}  {n_edges:>5}  {n_cycles:>6}  {f[0]:>12.2f}  {f[1]:>5.0f}")
+        print(f"  {i:>3}  {n_edges:>5}  {f[0]:>12.2f}  {f[1]:>5.0f}")
 
     # ── 5. 保存结果和可视化 ──────────────────────────────────
     print(f"\n[5/5] 保存结果...")
@@ -246,7 +229,7 @@ def _run_single(args):
     pareto_path = os.path.join(args.output, "pareto_front.csv")
     seen = set()
     with open(pareto_path, "w") as f:
-        f.write("index,edges,cycles,max_cycle_len,mdl,sdiff\n")
+        f.write("index,edges,mdl,sdiff\n")
         idx = 0
         for g, fv in zip(result.pareto_graphs, result.pareto_f):
             key = (round(fv[0], 4), int(fv[1]))
@@ -254,10 +237,35 @@ def _run_single(args):
                 continue
             seen.add(key)
             n_edges = int(np.sum(g.adj))
-            f.write(f"{idx},{n_edges},{g.count_cycles()},"
-                    f"{g.max_cycle_length()},{fv[0]:.4f},{fv[1]:.0f}\n")
+            f.write(f"{idx},{n_edges},{fv[0]:.4f},{fv[1]:.0f}\n")
             idx += 1
     print(f"  Pareto CSV: {pareto_path} ({idx} 个唯一解)")
+
+    # 保存实验参数
+    import json
+    params_path = os.path.join(args.output, "params.json")
+    params = {
+        "model": args.model,
+        "bif": args.bif,
+        "n_samples": args.n_samples,
+        "pop_size": args.pop_size,
+        "generations": args.generations,
+        "neighbors": args.neighbors,
+        "prob_neighbor": args.prob_neighbor,
+        "max_replace": args.max_replace,
+        "mutation_prob": args.mutation_prob,
+        "mutation_ops_min": args.mutation_ops_min,
+        "mutation_ops_max": args.mutation_ops_max,
+        "max_sdiff": args.max_sdiff,
+        "max_parents": args.max_parents,
+        "mdl_penalty": args.mdl_penalty,
+        "seed": args.seed,
+        "n_nodes": len(node_names),
+        "n_states": n_states,
+    }
+    with open(params_path, "w") as f:
+        json.dump(params, f, indent=2)
+    print(f"  实验参数: {params_path}")
 
     # 保存 Sdiff=0 的最优图 (BIF)
     if result.pareto_graphs:
@@ -321,7 +329,6 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
         "--pop-size", str(args.pop_size),
         "--generations", str(args.generations),
         "--max-sdiff", str(args.max_sdiff),
-        "--max-cycle", str(args.max_cycle),
         "--mdl-penalty", str(args.mdl_penalty),
         "--neighbors", str(args.neighbors),
         "--prob-neighbor", str(args.prob_neighbor),
@@ -345,11 +352,6 @@ def _run_batch(args):
     """并行多次 MOEA/D 运行，汇总 Pareto 前沿。"""
     os.makedirs(args.output, exist_ok=True)
 
-    # 计算 max_cycle 默认值
-    if args.max_cycle is None:
-        n_peek = _peek_n_nodes(args.bif, args.model, args.prior_file)
-        args.max_cycle = max(2, int(np.sqrt(n_peek)))
-
     # ── 预生成共享先验网络和数据 ─────────────────────────
     shared_dir = os.path.join(args.output, "shared")
     prior_file = os.path.join(shared_dir, "prior.pkl")
@@ -360,13 +362,9 @@ def _run_batch(args):
         os.makedirs(shared_dir, exist_ok=True)
 
         if args.bif:
-            prior_graph, node_names, n_states = PriorNetwork.from_bif(
-                args.bif, max_forbidden_cycle=args.max_cycle
-            )
+            prior_graph, node_names, n_states = PriorNetwork.from_bif(args.bif)
         else:
-            prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(
-                args.model, max_forbidden_cycle=args.max_cycle
-            )
+            prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(args.model)
             prior_graph = PriorNetwork.perturb(prior_graph, n_changes=6, seed=9999)
         with open(prior_file, "wb") as f:
             pickle.dump((prior_graph, node_names, n_states), f)

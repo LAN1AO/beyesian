@@ -4,22 +4,15 @@ import numpy as np
 
 
 class DirectedGraph:
-    """带有放松无环约束的有向图。
+    """有向无环图 (DAG)。
 
-    禁止长度 ≤ max_forbidden_cycle 的短环（易检测），允许更长的环。
-    例如 n=3 时: 禁止 2-环和 3-环，允许 4+ 环（留待后续 DAG 转化处理）。
+    所有边操作均带环检测，保证图始终无环。
     可选限制每个节点的最大父节点数 max_parents。
     使用 numpy 邻接矩阵 (n×n, int8) 存储图结构。
     """
 
-    def __init__(self, n_nodes: int, max_forbidden_cycle: int = 3,
-                 max_parents: int | None = None):
-        if max_forbidden_cycle < 2:
-            raise ValueError(
-                f"max_forbidden_cycle 必须 ≥ 2, 当前值: {max_forbidden_cycle}"
-            )
+    def __init__(self, n_nodes: int, max_parents: int | None = None):
         self.n_nodes = n_nodes
-        self.max_forbidden_cycle = max_forbidden_cycle
         self.max_parents = max_parents
         self.adj = np.zeros((n_nodes, n_nodes), dtype=np.int8)
 
@@ -27,47 +20,42 @@ class DirectedGraph:
 
     @classmethod
     def from_edges(
-        cls, n_nodes: int, edges: list[tuple[int, int]], max_forbidden_cycle: int = 3,
+        cls, n_nodes: int, edges: list[tuple[int, int]],
         max_parents: int | None = None,
     ) -> DirectedGraph:
-        g = cls(n_nodes, max_forbidden_cycle, max_parents=max_parents)
+        g = cls(n_nodes, max_parents=max_parents)
         for u, v in edges:
             if not g.add_edge(u, v):
-                raise ValueError(
-                    f"边 {u}→{v} 会创建长度 ≤ {max_forbidden_cycle} 的被禁环"
-                )
+                raise ValueError(f"边 {u}→{v} 会产生环")
         return g
 
     @classmethod
     def from_adj_matrix(
-        cls, adj: np.ndarray, max_forbidden_cycle: int = 3,
-        max_parents: int | None = None,
+        cls, adj: np.ndarray, max_parents: int | None = None,
     ) -> DirectedGraph:
         n = adj.shape[0]
-        g = cls(n, max_forbidden_cycle, max_parents=max_parents)
+        g = cls(n, max_parents=max_parents)
         g.adj = adj.astype(np.int8).copy()
-        if not g._is_valid():
-            raise ValueError("邻接矩阵存在被禁的短环")
+        if g.count_cycles() > 0:
+            raise ValueError("邻接矩阵存在环")
         return g
 
     def copy(self) -> DirectedGraph:
-        g = DirectedGraph(self.n_nodes, self.max_forbidden_cycle,
-                          max_parents=self.max_parents)
+        g = DirectedGraph(self.n_nodes, max_parents=self.max_parents)
         g.adj = self.adj.copy()
         return g
 
     # ── 边操作 (全部带环检测) ────────────────────────────────
 
     def add_edge(self, u: int, v: int) -> bool:
-        """尝试添加边 u→v，若产生被禁短环或超过最大父节点数则返回 False。"""
+        """尝试添加边 u→v，若产生环或超过最大父节点数则返回 False。"""
         if u == v:
             return False  # 禁止自环
         if self.adj[u, v]:
             return True  # 边已存在
         if self.max_parents is not None and self.get_in_degree(v) >= self.max_parents:
             return False
-        cycle_len = self._would_create_cycle(u, v)
-        if cycle_len is not None and cycle_len <= self.max_forbidden_cycle:
+        if self._would_create_cycle(u, v):
             return False
         self.adj[u, v] = 1
         return True
@@ -115,8 +103,8 @@ class DirectedGraph:
 
     # ── 环检测 ────────────────────────────────────────────────
 
-    def _would_create_any_cycle(self, u: int, v: int) -> bool:
-        """检查添加 u→v 是否会形成任意长度的环（无界 DFS）。"""
+    def _would_create_cycle(self, u: int, v: int) -> bool:
+        """检查添加 u→v 是否会形成环（DFS 从 v 出发检查能否到达 u）。"""
         visited = {v}
         stack = [v]
         while stack:
@@ -129,34 +117,7 @@ class DirectedGraph:
                     stack.append(child)
         return False
 
-    def _would_create_cycle(self, u: int, v: int) -> int | None:
-        """检查添加 u→v 是否会形成环以及环的长度。
-
-        从 v 出发做限界 BFS，仅检测长度 ≤ max_forbidden_cycle 的环
-        （更长的环被允许，无需检测）。
-
-        复杂度: O(b^d)，b 为平均出度，d ≤ 3。
-        """
-        # BFS 最大深度: 深度 d 可检测到 d+2 长度的环
-        # 只需检测 ≤ max_forbidden_cycle 的环 → 最大深度 = max_forbidden_cycle - 2
-        max_depth = self.max_forbidden_cycle - 2
-        if max_depth < 0:
-            return None  # 若 max_forbidden_cycle=2，仅需检测 2-环，BFS 深度 0 即可
-
-        visited = {v}
-        queue = [(v, 0)]
-        for node, depth in queue:
-            if depth > max_depth:
-                continue
-            for child in self.get_children(node):
-                if child == u:
-                    return depth + 2  # 环长度 = path v→...→u + edge u→v
-                if child not in visited:
-                    visited.add(child)
-                    queue.append((child, depth + 1))
-        return None
-
-    def _iter_cycles(self, max_length: int | None = None):
+    def _iter_cycles(self):
         """迭代图中所有简单环，每个环只产出一次（以环中最小节点为起点）。
 
         Yields: (cycle_length, path_list)
@@ -165,8 +126,6 @@ class DirectedGraph:
             stack = [(start, [start])]
             while stack:
                 node, path = stack.pop()
-                if max_length is not None and len(path) > max_length:
-                    continue
                 for child in self.get_children(node):
                     if child == start:
                         if min(path) == start:  # 只在最小节点处产出，避免重复
@@ -174,31 +133,8 @@ class DirectedGraph:
                     elif child not in path:
                         stack.append((child, path + [child]))
 
-    def has_forbidden_cycle(self, max_forbidden: int) -> bool:
-        for length, _ in self._iter_cycles(max_length=max_forbidden):
-            if 2 <= length <= max_forbidden:
-                return True
-        return False
-
-    def _is_valid(self) -> bool:
-        return not self.has_forbidden_cycle(self.max_forbidden_cycle)
-
     def count_cycles(self) -> int:
         return sum(1 for _ in self._iter_cycles())
-
-    def max_cycle_length(self) -> int:
-        """返回图中最长环的长度，若无环则返回 0。"""
-        max_len = 0
-        for length, _ in self._iter_cycles():
-            if length > max_len:
-                max_len = length
-        return max_len
-
-    def has_cycle_with_length(self, length: int) -> bool:
-        for clen, _ in self._iter_cycles(max_length=length):
-            if clen == length:
-                return True
-        return False
 
     # ── 工具方法 ──────────────────────────────────────────────
 
@@ -210,17 +146,13 @@ class DirectedGraph:
     def __repr__(self) -> str:
         n_edges = int(np.sum(self.adj))
         mp = f", max_parents={self.max_parents}" if self.max_parents else ""
-        return (
-            f"DirectedGraph(n={self.n_nodes}, edges={n_edges}, "
-            f"forbid_cycle≤{self.max_forbidden_cycle}{mp})"
-        )
+        return f"DirectedGraph(n={self.n_nodes}, edges={n_edges}{mp})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, DirectedGraph):
             return False
         return (
             self.n_nodes == other.n_nodes
-            and self.max_forbidden_cycle == other.max_forbidden_cycle
             and self.max_parents == other.max_parents
             and np.array_equal(self.adj, other.adj)
         )

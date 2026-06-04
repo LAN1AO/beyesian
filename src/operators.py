@@ -46,9 +46,8 @@ def crossover(
         rng = random.Random()
 
     n_nodes = parent1.n_nodes
-    max_forbidden = parent1.max_forbidden_cycle
     max_parents = parent1.max_parents
-    child = DirectedGraph(n_nodes, max_forbidden, max_parents=max_parents)
+    child = DirectedGraph(n_nodes, max_parents=max_parents)
 
     # 随机化节点处理顺序，避免对 parent1 的偏向
     node_order = list(range(n_nodes))
