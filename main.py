@@ -121,6 +121,10 @@ def main():
         "--no-plot", action="store_true",
         help="跳过可视化",
     )
+    parser.add_argument(
+        "--plot-networks", action="store_true",
+        help="输出三个代表解的网络结构图 (默认关闭)",
+    )
 
     # Batch 模式
     parser.add_argument(
@@ -208,13 +212,18 @@ def _run_single(args):
     print(f"  Pareto 前沿解数: {len(result.pareto_graphs)}")
     print(f"  Ideal point: MDL={result.ideal[0]:.2f}, Sdiff={result.ideal[1]:.0f}")
 
-    # 打印 Pareto 前沿
-    print(f"\n  Pareto 前沿:")
-    print(f"  {'#':>3}  {'Edges':>5}  {'MDL':>12}  {'Sdiff':>5}")
-    print(f"  {'-' * 36}")
-    for i, (g, f) in enumerate(zip(result.pareto_graphs, result.pareto_f)):
-        n_edges = int(np.sum(g.adj))
-        print(f"  {i:>3}  {n_edges:>5}  {f[0]:>12.2f}  {f[1]:>5.0f}")
+    # 打印 Pareto 前沿（合并重复解）
+    from collections import Counter
+    pf_keys = [(int(np.sum(g.adj)), round(f[0], 2), int(f[1]))
+               for g, f in zip(result.pareto_graphs, result.pareto_f)]
+    pf_counts = Counter(pf_keys)
+    print(f"\n  Pareto 前沿 (唯一解 {len(pf_counts)} 个):")
+    print(f"  {'#':>3}  {'Edges':>5}  {'MDL':>12}  {'Sdiff':>5}  {'Count':>5}")
+    print(f"  {'-' * 42}")
+    for i, ((edges, mdl, sdiff), count) in enumerate(
+        sorted(pf_counts.items(), key=lambda x: (x[0][2], x[0][1]))
+    ):
+        print(f"  {i:>3}  {edges:>5}  {mdl:>12.2f}  {sdiff:>5}  {count:>5}")
 
     # ── 5. 保存结果和可视化 ──────────────────────────────────
     print(f"\n[5/5] 保存结果...")
@@ -225,21 +234,15 @@ def _run_single(args):
         pickle.dump(result, f)
     print(f"  结果: {result_path}")
 
-    # 保存 Pareto 前沿 CSV（去重）
+    # 保存 Pareto 前沿 CSV（合并重复解，标记数量）
     pareto_path = os.path.join(args.output, "pareto_front.csv")
-    seen = set()
     with open(pareto_path, "w") as f:
-        f.write("index,edges,mdl,sdiff\n")
-        idx = 0
-        for g, fv in zip(result.pareto_graphs, result.pareto_f):
-            key = (round(fv[0], 4), int(fv[1]))
-            if key in seen:
-                continue
-            seen.add(key)
-            n_edges = int(np.sum(g.adj))
-            f.write(f"{idx},{n_edges},{fv[0]:.4f},{fv[1]:.0f}\n")
-            idx += 1
-    print(f"  Pareto CSV: {pareto_path} ({idx} 个唯一解)")
+        f.write("index,edges,mdl,sdiff,count\n")
+        for i, ((edges, mdl, sdiff), count) in enumerate(
+            sorted(pf_counts.items(), key=lambda x: (x[0][2], x[0][1]))
+        ):
+            f.write(f"{i},{edges},{mdl:.2f},{sdiff},{count}\n")
+    print(f"  Pareto CSV: {pareto_path} ({len(pf_counts)} 个唯一解)")
 
     # 保存实验参数
     import json
@@ -266,18 +269,6 @@ def _run_single(args):
     with open(params_path, "w") as f:
         json.dump(params, f, indent=2)
     print(f"  实验参数: {params_path}")
-
-    # 保存 Sdiff=0 的最优图 (BIF)
-    if result.pareto_graphs:
-        zero_sdiff_idx = None
-        for i, fv in enumerate(result.pareto_f):
-            if fv[1] == 0:
-                zero_sdiff_idx = i
-                break
-        if zero_sdiff_idx is not None:
-            bif_path = os.path.join(args.output, "best_graph.bif")
-            _save_bif(result.pareto_graphs[zero_sdiff_idx],
-                       node_names, n_states, bif_path)
 
     # 可视化
     if not args.no_plot:
@@ -309,7 +300,7 @@ def _run_single(args):
         obj_conv_plot = os.path.join(args.output, "objective_convergence.png")
         plot_objective_convergence(result, save_path=obj_conv_plot)
 
-        if result.pareto_graphs and _has_networkx():
+        if args.plot_networks and result.pareto_graphs and _has_networkx():
             _plot_three_networks(result, args.output, node_names)
 
     print(f"\n  全部完成! 输出目录: {args.output}")
@@ -340,6 +331,8 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
         "--output", output_dir,
         "--no-plot",
     ]
+    if args.plot_networks:
+        cmd.append("--plot-networks")
     if args.max_parents is not None:
         cmd.append("--max-parents")
         cmd.append(str(args.max_parents))
@@ -573,20 +566,6 @@ def _plot_three_networks(result, output_dir: str, node_names: list[str]) -> None
     for idx, fname, title in labels:
         path = os.path.join(output_dir, f"network_{fname}.png")
         plot_network(graphs[idx], node_names, title=title, save_path=path)
-
-
-def _save_bif(graph, node_names: list[str], n_states: list[int],
-              path: str) -> None:
-    """将图保存为简化 BIF 格式（仅结构，不含概率表）。"""
-    with open(path, "w") as f:
-        f.write(f"network unknown {{\n}}\n")
-        for i, name in enumerate(node_names):
-            states_str = ", ".join(f"state{j}" for j in range(n_states[i]))
-            f.write(f"variable {name} {{\n"
-                    f"  type discrete [{n_states[i]}] {{ {states_str} }};\n"
-                    f"}}\n")
-        for name in node_names:
-            f.write(f"probability ({name}) {{\n  table 1.0;\n}}\n")
 
 
 if __name__ == "__main__":

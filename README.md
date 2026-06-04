@@ -70,6 +70,7 @@ python3 main.py --model alarm --batch 20 \
 | `--seed` | `42` | 随机种子 |
 | `--output` | `./output` | 输出目录 |
 | `--no-plot` | false | 跳过生成图表 |
+| `--plot-networks` | false | 输出三个代表解的网络结构图 |
 
 ## 常用示例
 
@@ -110,14 +111,13 @@ python3 main.py --model alarm --batch 30 --workers 8 \
 | 文件 | 说明 |
 |------|------|
 | `result.pkl` | 完整 MOEADResult 对象 |
-| `pareto_front.csv` | Pareto 前沿解 (index,edges,mdl,sdiff) |
+| `pareto_front.csv` | Pareto 前沿解 (index,edges,mdl,sdiff,count) |
 | `params.json` | 本次实验的完整参数记录 |
 | `pareto_front.png` | Pareto 前沿散点图 (全部解 + 先验/原始网络标记) |
 | `pareto_front_acyclic.png` | 仅无环解的 Pareto 前沿图 |
 | `convergence.png` | Pareto 解数量收敛曲线 |
 | `objective_convergence.png` | MDL 和 Sdiff 各自收敛曲线 |
-| `best_graph.bif` | Sdiff=0 的最优图 (BIF 格式) |
-| `network_*.png` | 三个代表解的网络结构图 |
+| `network_*.png` | 三个代表解的网络结构图 (需 `--plot-networks`) |
 
 ### Batch 模式额外输出
 
