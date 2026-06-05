@@ -114,7 +114,6 @@ python3 main.py --model alarm --batch 30 --workers 8 \
 | `pareto_front.csv` | Pareto 前沿解 (index,edges,mdl,sdiff,count) |
 | `params.json` | 本次实验的完整参数记录 |
 | `pareto_front.png` | Pareto 前沿散点图 (全部解 + 先验/原始网络标记) |
-| `pareto_front_acyclic.png` | 仅无环解的 Pareto 前沿图 |
 | `convergence.png` | Pareto 解数量收敛曲线 |
 | `objective_convergence.png` | MDL 和 Sdiff 各自收敛曲线 |
 | `network_*.png` | 三个代表解的网络结构图 (需 `--plot-networks`) |
@@ -127,7 +126,7 @@ python3 main.py --model alarm --batch 30 --workers 8 \
 | `shared/data.npy` | 共享数据集 |
 | `batch_<seed>/` | 各次运行的独立输出目录 |
 | `combined_pareto.png` | 全部运行的 Pareto 前沿汇总图 |
-| `combined_pareto_acyclic.png` | 全部运行的无环解 Pareto 前沿汇总图 |
+| `params.json` | 实验参数记录 |
 
 ## 编程接口
 
