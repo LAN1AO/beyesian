@@ -6,3 +6,4 @@ output/
 paper/
 prompt/
 venv/
+.vscode/
