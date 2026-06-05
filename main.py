@@ -24,8 +24,6 @@ from src.config import MOEADConfig
 from src.moead import MOEAD
 from src.prior import PriorNetwork
 from src.visualize import (
-    plot_acyclic_pareto_front,
-    plot_combined_acyclic,
     plot_convergence,
     plot_objective_convergence,
     plot_pareto_front,
@@ -120,6 +118,10 @@ def main():
     parser.add_argument(
         "--no-plot", action="store_true",
         help="跳过可视化",
+    )
+    parser.add_argument(
+        "--no-params", action="store_true",
+        help="跳过输出 params.json (batch 子进程使用)",
     )
     parser.add_argument(
         "--plot-networks", action="store_true",
@@ -244,31 +246,32 @@ def _run_single(args):
             f.write(f"{i},{edges},{mdl:.2f},{sdiff},{count}\n")
     print(f"  Pareto CSV: {pareto_path} ({len(pf_counts)} 个唯一解)")
 
-    # 保存实验参数
-    import json
-    params_path = os.path.join(args.output, "params.json")
-    params = {
-        "model": args.model,
-        "bif": args.bif,
-        "n_samples": args.n_samples,
-        "pop_size": args.pop_size,
-        "generations": args.generations,
-        "neighbors": args.neighbors,
-        "prob_neighbor": args.prob_neighbor,
-        "max_replace": args.max_replace,
-        "mutation_prob": args.mutation_prob,
-        "mutation_ops_min": args.mutation_ops_min,
-        "mutation_ops_max": args.mutation_ops_max,
-        "max_sdiff": args.max_sdiff,
-        "max_parents": args.max_parents,
-        "mdl_penalty": args.mdl_penalty,
-        "seed": args.seed,
-        "n_nodes": len(node_names),
-        "n_states": n_states,
-    }
-    with open(params_path, "w") as f:
-        json.dump(params, f, indent=2)
-    print(f"  实验参数: {params_path}")
+    # 保存实验参数（batch 子进程跳过，由 _run_batch 统一输出）
+    if not args.no_params:
+        import json
+        params_path = os.path.join(args.output, "params.json")
+        params = {
+            "model": args.model,
+            "bif": args.bif,
+            "n_samples": args.n_samples,
+            "pop_size": args.pop_size,
+            "generations": args.generations,
+            "neighbors": args.neighbors,
+            "prob_neighbor": args.prob_neighbor,
+            "max_replace": args.max_replace,
+            "mutation_prob": args.mutation_prob,
+            "mutation_ops_min": args.mutation_ops_min,
+            "mutation_ops_max": args.mutation_ops_max,
+            "max_sdiff": args.max_sdiff,
+            "max_parents": args.max_parents,
+            "mdl_penalty": args.mdl_penalty,
+            "seed": args.seed,
+            "n_nodes": len(node_names),
+            "n_states": n_states,
+        }
+        with open(params_path, "w") as f:
+            json.dump(params, f, indent=2)
+        print(f"  实验参数: {params_path}")
 
     # 可视化
     if not args.no_plot:
@@ -287,12 +290,6 @@ def _run_single(args):
 
         pareto_plot = os.path.join(args.output, "pareto_front.png")
         plot_pareto_front(result, save_path=pareto_plot, original_pos=original_pos)
-
-        acyclic_plot = os.path.join(args.output, "pareto_front_acyclic.png")
-        plot_acyclic_pareto_front(
-            result.pareto_f, result.pareto_graphs,
-            save_path=acyclic_plot, original_pos=original_pos,
-        )
 
         conv_plot = os.path.join(args.output, "convergence.png")
         plot_convergence(result, save_path=conv_plot)
@@ -327,10 +324,14 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
         "--mutation-prob", str(args.mutation_prob),
         "--mutation-ops-min", str(args.mutation_ops_min),
         "--mutation-ops-max", str(args.mutation_ops_max),
+        "--model", args.model,
         "--seed", str(seed),
         "--output", output_dir,
         "--no-plot",
+        "--no-params",
     ]
+    if args.bif:
+        cmd.extend(["--bif", args.bif])
     if args.plot_networks:
         cmd.append("--plot-networks")
     if args.max_parents is not None:
@@ -439,20 +440,37 @@ def _run_batch(args):
     print(f"  Pareto 解数: 均值 {np.mean(pareto_sizes):.1f}, "
           f"最小 {np.min(pareto_sizes)}, 最大 {np.max(pareto_sizes)}")
 
+    # ── 保存实验参数 ──────────────────────────────────────
+    import json
+    params = {
+        "model": args.model,
+        "bif": args.bif,
+        "n_samples": args.n_samples,
+        "pop_size": args.pop_size,
+        "generations": args.generations,
+        "neighbors": args.neighbors,
+        "prob_neighbor": args.prob_neighbor,
+        "max_replace": args.max_replace,
+        "mutation_prob": args.mutation_prob,
+        "mutation_ops_min": args.mutation_ops_min,
+        "mutation_ops_max": args.mutation_ops_max,
+        "max_sdiff": args.max_sdiff,
+        "max_parents": args.max_parents,
+        "mdl_penalty": args.mdl_penalty,
+        "batch": args.batch,
+        "workers": args.workers,
+    }
+    params_path = os.path.join(args.output, "params.json")
+    with open(params_path, "w") as f:
+        json.dump(params, f, indent=2)
+
     # ── 汇总绘图 ──────────────────────────────────────────
     _plot_batch_combined(results, args.output, args.model,
                          args.pop_size, args.generations)
 
-    acyclic_path = os.path.join(args.output, "combined_pareto_acyclic.png")
-    plot_combined_acyclic(
-        results, save_path=acyclic_path,
-        title=f"Combined Acyclic Pareto Front — "
-              f"{args.model} (pop={args.pop_size}, gen={args.generations})",
-    )
-
     print(f"\n全部完成! 输出目录: {args.output}")
+    print(f"  params.json — 实验参数")
     print(f"  combined_pareto.png — 全量汇总图")
-    print(f"  combined_pareto_acyclic.png — 无环解汇总图")
 
 
 # ═══════════════════════════════════════════════════════════════
