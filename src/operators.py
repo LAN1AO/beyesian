@@ -40,10 +40,9 @@ def crossover(
     score_cache: dict | None = None,
     crossover_type: str = "sequential",
 ) -> DirectedGraph:
-    """逐节点父集重组交叉算子，支持四种模式。
+    """逐节点父集重组交叉算子，支持三种模式。
 
     sequential (默认): 用归一化切比雪夫聚合比较两父代父集，选更优者。
-    random: 逐节点随机选择父代1或父代2的父集（验证 Chebyshev 驱动是否有效）。
     no-cycle-check: 先构建图（不判环），后通过随机删边修复环
                    （判断当前算子的优势区间）。
     score-diff-sort: 与 sequential 选择逻辑相同，但节点按 Chebyshev
@@ -61,7 +60,7 @@ def crossover(
         parent1_scores: 父代1的 {node: (mdl, sdiff)} 缓存（可选）
         parent2_scores: 父代2的 {node: (mdl, sdiff)} 缓存（可选）
         score_cache: 组合缓存 (node, frozenset(parents)) → (mdl, sdiff)（可选）
-        crossover_type: "sequential" | "random" | "no-cycle-check" | "score-diff-sort"
+        crossover_type: "sequential" | "no-cycle-check" | "score-diff-sort"
 
     Returns:
         子代图
@@ -73,12 +72,10 @@ def crossover(
     max_parents = parent1.max_parents
     child = DirectedGraph(n_nodes, max_parents=max_parents)
     check_cycles = (crossover_type != "no-cycle-check")
-    use_chebyshev = (crossover_type != "random")
     sort_by_diff = (crossover_type == "score-diff-sort")
 
-    # 归一化分母（仅 Chebyshev 模式需要）
-    if use_chebyshev:
-        range_ = np.maximum(nadir - ideal, eps)
+    # 归一化分母
+    range_ = np.maximum(nadir - ideal, eps)
 
     # 确定节点处理顺序
     node_order = list(range(n_nodes))
@@ -131,11 +128,8 @@ def crossover(
 
         if set(p1_parents) == set(p2_parents):
             selected = p1_parents
-        elif not use_chebyshev:
-            # random 模式：随机选择父集
-            selected = p1_parents if rng.random() < 0.5 else p2_parents
         else:
-            # Chebyshev 驱动选择（sequential / no-cycle-check）
+            # Chebyshev 驱动选择
             if parent1_scores is not None and node in parent1_scores:
                 mdl1, sd1 = parent1_scores[node]
             else:
