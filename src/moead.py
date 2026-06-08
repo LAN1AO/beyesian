@@ -172,6 +172,7 @@ class MOEAD:
                     parent1_scores=self.node_scores[k],
                     parent2_scores=self.node_scores[l],
                     score_cache=self._score_cache,
+                    crossover_type=config.crossover_type,
                 )
 
                 # 3. 变异

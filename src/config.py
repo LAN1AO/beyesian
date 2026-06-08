@@ -27,6 +27,7 @@ class MOEADConfig:
     max_replacements: int = 2  # nr: 每个子代最多替换邻居数
 
     # --- 遗传算子 ---
+    crossover_type: str = "sequential"  # sequential | random | no-cycle-check
     crossover_prob: float = 0.9
     mutation_prob: float = 0.3
     mutation_ops_min: int = 2

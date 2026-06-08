@@ -7,6 +7,24 @@ import numpy as np
 from src.graph import DirectedGraph
 
 
+def _fix_cycles(graph: DirectedGraph, rng: random.Random, max_iters: int = 1000):
+    """通过随机删边修复图中的环。
+
+    每次找到一个环，随机删除环中的一条边，重复至无环或达到最大迭代次数。
+    """
+    for _ in range(max_iters):
+        cycle_path = None
+        for __, path in graph._iter_cycles():
+            cycle_path = path
+            break
+        if cycle_path is None:
+            return
+        idx = rng.randrange(len(cycle_path))
+        u = cycle_path[idx]
+        v = cycle_path[(idx + 1) % len(cycle_path)]
+        graph.adj[u, v] = 0
+
+
 def crossover(
     parent1: DirectedGraph,
     parent2: DirectedGraph,
@@ -20,15 +38,18 @@ def crossover(
     parent1_scores: dict[int, tuple[float, float]] | None = None,
     parent2_scores: dict[int, tuple[float, float]] | None = None,
     score_cache: dict | None = None,
+    crossover_type: str = "sequential",
 ) -> DirectedGraph:
-    """逐节点父集比较交叉算子。
+    """逐节点父集重组交叉算子，支持三种模式。
 
-    对每个节点，比较两个父代中该节点的父集（用归一化切比雪夫聚合），
-    选择更优的父集。若提供 parent*_scores，则使用缓存评分（免重复计算）。
+    sequential (默认): 用归一化切比雪夫聚合比较两父代父集，选更优者。
+    random: 逐节点随机选择父代1或父代2的父集（验证 Chebyshev 驱动是否有效）。
+    no-cycle-check: 先构建图（不判环），后通过随机删边修复环
+                   （判断当前算子的优势区间）。
 
     Args:
         parent1, parent2: 两个父代图
-        mdl_score: MDLScore 实例（用于缓存未命中时的兜底计算）
+        mdl_score: MDLScore 实例（sequential/no-cycle-check 模式用于缓存未命中兜底）
         sdiff_score: StructuralDiffScore 实例
         weight: 当前子问题的权重向量 (n_objectives,)
         ideal: 当前 ideal point
@@ -38,6 +59,7 @@ def crossover(
         parent1_scores: 父代1的 {node: (mdl, sdiff)} 缓存（可选）
         parent2_scores: 父代2的 {node: (mdl, sdiff)} 缓存（可选）
         score_cache: 组合缓存 (node, frozenset(parents)) → (mdl, sdiff)（可选）
+        crossover_type: "sequential" | "random" | "no-cycle-check"
 
     Returns:
         子代图
@@ -48,13 +70,16 @@ def crossover(
     n_nodes = parent1.n_nodes
     max_parents = parent1.max_parents
     child = DirectedGraph(n_nodes, max_parents=max_parents)
+    check_cycles = (crossover_type != "no-cycle-check")
+    use_chebyshev = (crossover_type != "random")
 
     # 随机化节点处理顺序，避免对 parent1 的偏向
     node_order = list(range(n_nodes))
     rng.shuffle(node_order)
 
-    # 归一化分母
-    range_ = np.maximum(nadir - ideal, eps)
+    # 归一化分母（仅 Chebyshev 模式需要）
+    if use_chebyshev:
+        range_ = np.maximum(nadir - ideal, eps)
 
     for node in node_order:
         p1_parents = parent1.get_parents(node)
@@ -62,8 +87,11 @@ def crossover(
 
         if set(p1_parents) == set(p2_parents):
             selected = p1_parents
+        elif not use_chebyshev:
+            # random 模式：随机选择父集
+            selected = p1_parents if rng.random() < 0.5 else p2_parents
         else:
-            # 优先使用缓存评分，否则实时计算并存入组合缓存
+            # Chebyshev 驱动选择（sequential / no-cycle-check）
             if parent1_scores is not None and node in parent1_scores:
                 mdl1, sd1 = parent1_scores[node]
             else:
@@ -96,9 +124,18 @@ def crossover(
 
             selected = p1_parents if g1 <= g2 else p2_parents
 
-        # 组装: 按序加入选定的父节点边
+        # 组装: 加入选定的父节点边
         for p in selected:
-            child.add_edge(p, node)
+            if check_cycles:
+                child.add_edge(p, node)
+            else:
+                if p != node and not child.adj[p, node]:
+                    if max_parents is None or child.get_in_degree(node) < max_parents:
+                        child.adj[p, node] = 1
+
+    # no-cycle-check 模式：事后修复环
+    if not check_cycles:
+        _fix_cycles(child, rng)
 
     return child
 

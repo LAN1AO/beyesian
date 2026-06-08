@@ -105,6 +105,11 @@ def main():
         "--mutation-ops-max", type=int, default=6,
         help="每次变异最多边操作次数 (默认: 6)",
     )
+    parser.add_argument(
+        "--crossover-type", type=str, default="sequential",
+        choices=["sequential", "random", "no-cycle-check"],
+        help="交叉算子类型: sequential (默认) | random | no-cycle-check",
+    )
 
     # 输出
     parser.add_argument(
@@ -195,6 +200,7 @@ def _run_single(args):
         n_generations=args.generations,
         prob_neighbor_mating=args.prob_neighbor,
         max_replacements=args.max_replace,
+        crossover_type=args.crossover_type,
         mutation_prob=args.mutation_prob,
         mutation_ops_min=args.mutation_ops_min,
         mutation_ops_max=args.mutation_ops_max,
@@ -259,6 +265,7 @@ def _run_single(args):
             "neighbors": args.neighbors,
             "prob_neighbor": args.prob_neighbor,
             "max_replace": args.max_replace,
+            "crossover_type": args.crossover_type,
             "mutation_prob": args.mutation_prob,
             "mutation_ops_min": args.mutation_ops_min,
             "mutation_ops_max": args.mutation_ops_max,
@@ -321,6 +328,7 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
         "--neighbors", str(args.neighbors),
         "--prob-neighbor", str(args.prob_neighbor),
         "--max-replace", str(args.max_replace),
+        "--crossover-type", str(args.crossover_type),
         "--mutation-prob", str(args.mutation_prob),
         "--mutation-ops-min", str(args.mutation_ops_min),
         "--mutation-ops-max", str(args.mutation_ops_max),
@@ -451,6 +459,7 @@ def _run_batch(args):
         "neighbors": args.neighbors,
         "prob_neighbor": args.prob_neighbor,
         "max_replace": args.max_replace,
+        "crossover_type": args.crossover_type,
         "mutation_prob": args.mutation_prob,
         "mutation_ops_min": args.mutation_ops_min,
         "mutation_ops_max": args.mutation_ops_max,
