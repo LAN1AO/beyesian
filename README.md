@@ -56,7 +56,7 @@ python3 main.py --model alarm --batch 20 \
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--max-parents` | 无限制 | 每个节点最大父节点数 |
-| `--max-sdiff` | `15` | 结构对称差总和上限 |
+| `--max-sdiff` | 自动计算 | 结构对称差总和上限 (默认: n×max_parents+E_prior) |
 | `--mdl-penalty` | `1.0` | MDL 惩罚项缩放 (1.0=标准BIC，越小惩罚越轻) |
 
 ### Batch 模式

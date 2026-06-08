@@ -70,8 +70,8 @@ def main():
         help="MDL 惩罚项缩放因子 (默认 1.0=标准BIC, 越小惩罚越轻)",
     )
     parser.add_argument(
-        "--max-sdiff", type=int, default=15,
-        help="结构对称差上限 (默认: 15)",
+        "--max-sdiff", type=int, default=None,
+        help="结构对称差上限 (默认: 自动计算 = n×max_parents+E_prior)",
     )
     parser.add_argument(
         "--pop-size", type=int, default=50,
@@ -189,12 +189,22 @@ def _run_single(args):
 
     # ── 3. 配置 MOEA/D ───────────────────────────────────────
     print(f"[3/5] 配置 MOEA/D...")
+
+    # 自动计算 max_sdiff 理论最大值
+    if args.max_sdiff is None:
+        n_prior_edges = len(prior_graph.get_edges())
+        max_sdiff = _compute_max_sdiff(len(node_names), args.max_parents, n_prior_edges)
+        print(f"  max_sdiff 自动计算: {len(node_names)}×{args.max_parents or (len(node_names)-1)}"
+              f"+{n_prior_edges} = {max_sdiff}")
+    else:
+        max_sdiff = args.max_sdiff
+
     config = MOEADConfig(
         n_nodes=len(node_names),
         n_states=n_states,
         max_parents=args.max_parents,
         mdl_penalty_scale=args.mdl_penalty,
-        max_symmetric_diff=args.max_sdiff,
+        max_symmetric_diff=max_sdiff,
         n_weight_vectors=args.pop_size,
         n_neighbors=args.neighbors,
         n_generations=args.generations,
@@ -269,7 +279,7 @@ def _run_single(args):
             "mutation_prob": args.mutation_prob,
             "mutation_ops_min": args.mutation_ops_min,
             "mutation_ops_max": args.mutation_ops_max,
-            "max_sdiff": args.max_sdiff,
+            "max_sdiff": max_sdiff,
             "max_parents": args.max_parents,
             "mdl_penalty": args.mdl_penalty,
             "seed": args.seed,
@@ -387,6 +397,15 @@ def _run_batch(args):
         print(f"  共享数据: {data.shape[0]} 样本")
     else:
         print(f"共享文件已存在，跳过生成: {shared_dir}/")
+        with open(prior_file, "rb") as f:
+            prior_graph, node_names, n_states = pickle.load(f)
+
+    # 自动计算 max_sdiff 理论最大值
+    if args.max_sdiff is None:
+        n_prior_edges = len(prior_graph.get_edges())
+        args.max_sdiff = _compute_max_sdiff(len(node_names), args.max_parents, n_prior_edges)
+        print(f"  max_sdiff 自动计算: {len(node_names)}×{args.max_parents or (len(node_names)-1)}"
+              f"+{n_prior_edges} = {args.max_sdiff}")
 
     seeds = list(range(42, 42 + args.batch))
 
@@ -485,6 +504,17 @@ def _run_batch(args):
 # ═══════════════════════════════════════════════════════════════
 # 辅助函数
 # ═══════════════════════════════════════════════════════════════
+
+def _compute_max_sdiff(n_nodes: int, max_parents: int | None,
+                        prior_edges: int) -> int:
+    """计算 sdiff 的理论最大值。
+
+    max_sdiff = n_nodes × K + E_prior
+    其中 K = max_parents（若未限制则为 n_nodes - 1，即完全 DAG 每节点最多父节点数）。
+    """
+    K = max_parents if max_parents is not None else (n_nodes - 1)
+    return n_nodes * K + prior_edges
+
 
 def _peek_n_nodes(bif_path: str | None, model_name: str,
                    prior_file: str | None = None) -> int:
