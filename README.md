@@ -50,7 +50,7 @@ python3 main.py --model alarm --batch 20 \
 | `--mutation-prob` | `0.3` | 变异概率 |
 | `--mutation-ops-min` | `2` | 每次变异最少边操作次数 |
 | `--mutation-ops-max` | `6` | 每次变异最多边操作次数 |
-| `--crossover-type` | `sequential` | 交叉算子: sequential (默认) / random / no-cycle-check |
+| `--crossover-type` | `sequential` | 交叉算子: sequential / random / no-cycle-check / score-diff-sort |
 
 ### 约束
 | 参数 | 默认值 | 说明 |

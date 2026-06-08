@@ -40,12 +40,14 @@ def crossover(
     score_cache: dict | None = None,
     crossover_type: str = "sequential",
 ) -> DirectedGraph:
-    """逐节点父集重组交叉算子，支持三种模式。
+    """逐节点父集重组交叉算子，支持四种模式。
 
     sequential (默认): 用归一化切比雪夫聚合比较两父代父集，选更优者。
     random: 逐节点随机选择父代1或父代2的父集（验证 Chebyshev 驱动是否有效）。
     no-cycle-check: 先构建图（不判环），后通过随机删边修复环
                    （判断当前算子的优势区间）。
+    score-diff-sort: 与 sequential 选择逻辑相同，但节点按 Chebyshev
+                   评分差降序处理——分差大的节点优先抢占边。
 
     Args:
         parent1, parent2: 两个父代图
@@ -59,7 +61,7 @@ def crossover(
         parent1_scores: 父代1的 {node: (mdl, sdiff)} 缓存（可选）
         parent2_scores: 父代2的 {node: (mdl, sdiff)} 缓存（可选）
         score_cache: 组合缓存 (node, frozenset(parents)) → (mdl, sdiff)（可选）
-        crossover_type: "sequential" | "random" | "no-cycle-check"
+        crossover_type: "sequential" | "random" | "no-cycle-check" | "score-diff-sort"
 
     Returns:
         子代图
@@ -72,14 +74,56 @@ def crossover(
     child = DirectedGraph(n_nodes, max_parents=max_parents)
     check_cycles = (crossover_type != "no-cycle-check")
     use_chebyshev = (crossover_type != "random")
-
-    # 随机化节点处理顺序，避免对 parent1 的偏向
-    node_order = list(range(n_nodes))
-    rng.shuffle(node_order)
+    sort_by_diff = (crossover_type == "score-diff-sort")
 
     # 归一化分母（仅 Chebyshev 模式需要）
     if use_chebyshev:
         range_ = np.maximum(nadir - ideal, eps)
+
+    # 确定节点处理顺序
+    node_order = list(range(n_nodes))
+    if sort_by_diff:
+        # 预计算所有节点的 Chebyshev 评分差，按分差降序排列
+        # 分差大的节点优先处理，避免被后续环检测挡住其优选父集
+        node_diffs = []
+        for node in range(n_nodes):
+            p1p = parent1.get_parents(node)
+            p2p = parent2.get_parents(node)
+            if set(p1p) == set(p2p):
+                node_diffs.append((node, 0.0))
+                continue
+            # 复用缓存评分（与主循环相同的查找逻辑）
+            if parent1_scores is not None and node in parent1_scores:
+                mdl1, sd1 = parent1_scores[node]
+            else:
+                key = (node, frozenset(p1p))
+                if score_cache is not None and key in score_cache:
+                    mdl1, sd1 = score_cache[key]
+                else:
+                    mdl1 = mdl_score.score_node(node, p1p)
+                    sd1 = sdiff_score.score_node(node, p1p)
+                    if score_cache is not None:
+                        score_cache[key] = (mdl1, sd1)
+            if parent2_scores is not None and node in parent2_scores:
+                mdl2, sd2 = parent2_scores[node]
+            else:
+                key = (node, frozenset(p2p))
+                if score_cache is not None and key in score_cache:
+                    mdl2, sd2 = score_cache[key]
+                else:
+                    mdl2 = mdl_score.score_node(node, p2p)
+                    sd2 = sdiff_score.score_node(node, p2p)
+                    if score_cache is not None:
+                        score_cache[key] = (mdl2, sd2)
+            f1 = np.array([mdl1, sd1])
+            f2 = np.array([mdl2, sd2])
+            g1 = np.max(weight * np.abs(f1 - ideal) / range_)
+            g2 = np.max(weight * np.abs(f2 - ideal) / range_)
+            node_diffs.append((node, abs(g1 - g2)))
+        node_diffs.sort(key=lambda x: x[1], reverse=True)
+        node_order = [n for n, _ in node_diffs]
+    else:
+        rng.shuffle(node_order)
 
     for node in node_order:
         p1_parents = parent1.get_parents(node)

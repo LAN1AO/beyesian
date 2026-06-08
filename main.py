@@ -107,8 +107,8 @@ def main():
     )
     parser.add_argument(
         "--crossover-type", type=str, default="sequential",
-        choices=["sequential", "random", "no-cycle-check"],
-        help="交叉算子类型: sequential (默认) | random | no-cycle-check",
+        choices=["sequential", "random", "no-cycle-check", "score-diff-sort"],
+        help="交叉算子类型: sequential (默认) | random | no-cycle-check | score-diff-sort",
     )
 
     # 输出
