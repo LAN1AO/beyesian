@@ -77,7 +77,8 @@ def crossover(
     # 归一化分母
     range_ = np.maximum(nadir - ideal, eps)
 
-    # 确定节点处理顺序
+    # 确定节点处理顺序。自然索引序在 bnlearn 网络中通常近似拓扑序，
+    # 按此序 add_edge 时子节点尚无后代，_would_create_cycle DFS 可瞬间触底。
     node_order = list(range(n_nodes))
     if sort_by_diff:
         # 预计算所有节点的 Chebyshev 评分差，按分差降序排列
@@ -119,8 +120,7 @@ def crossover(
             node_diffs.append((node, abs(g1 - g2)))
         node_diffs.sort(key=lambda x: x[1], reverse=True)
         node_order = [n for n, _ in node_diffs]
-    else:
-        rng.shuffle(node_order)
+    # else: 保持自然索引序，无需打乱
 
     for node in node_order:
         p1_parents = parent1.get_parents(node)
