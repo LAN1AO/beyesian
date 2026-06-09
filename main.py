@@ -283,6 +283,7 @@ def _run_single(args):
             "max_parents": args.max_parents,
             "mdl_penalty": args.mdl_penalty,
             "seed": args.seed,
+            "git_commit": _get_git_commit(),
             "n_nodes": len(node_names),
             "n_states": n_states,
         }
@@ -485,6 +486,7 @@ def _run_batch(args):
         "max_sdiff": args.max_sdiff,
         "max_parents": args.max_parents,
         "mdl_penalty": args.mdl_penalty,
+        "git_commit": _get_git_commit(),
         "batch": args.batch,
         "workers": args.workers,
     }
@@ -504,6 +506,19 @@ def _run_batch(args):
 # ═══════════════════════════════════════════════════════════════
 # 辅助函数
 # ═══════════════════════════════════════════════════════════════
+
+def _get_git_commit() -> str:
+    """获取当前代码的 git commit 短哈希。"""
+    import subprocess
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return "unknown"
+
 
 def _compute_max_sdiff(n_nodes: int, max_parents: int | None,
                         prior_edges: int) -> int:
