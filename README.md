@@ -32,6 +32,7 @@ python3 main.py --model alarm --batch 20 \
 | `--model` | `asia` | bnlearn 网络名，可选 `alarm`, `sachs`, `child`, `insurance` 等 |
 | `--bif` | 无 | BIF 文件路径，优先级高于 `--model` |
 | `--prior-file` | 无 | 预生成先验 (.pkl)，batch 模式自动使用 |
+| `--prior-perturb` | 自动计算 | 先验网络扰动次数 (默认: max(3, ⌊√E_prior⌋)) |
 
 ### 数据
 | 参数 | 默认值 | 说明 |

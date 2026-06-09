@@ -110,6 +110,10 @@ def main():
         choices=["sequential", "no-cycle-check"],
         help="交叉算子类型: sequential (默认) | no-cycle-check",
     )
+    parser.add_argument(
+        "--prior-perturb", type=int, default=None,
+        help="先验网络扰动次数 (默认: 自动计算 = max(3, floor(sqrt(E_prior))))",
+    )
 
     # 输出
     parser.add_argument(
@@ -165,15 +169,18 @@ def _run_single(args):
     if args.prior_file:
         with open(args.prior_file, "rb") as f:
             prior_graph, node_names, n_states = pickle.load(f)
+        n_perturb = 0  # 从文件加载，不扰动
         print(f"  从文件加载先验: {args.prior_file}")
     elif args.bif:
         prior_graph, node_names, n_states = PriorNetwork.from_bif(args.bif)
+        n_perturb = 0  # BIF 文件不做扰动
     else:
         prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(args.model)
         original_graph = prior_graph.copy()
-        prior_graph = PriorNetwork.perturb(prior_graph, n_changes=6, seed=args.seed)
+        n_perturb = _compute_prior_perturb(len(original_graph.get_edges())) if args.prior_perturb is None else args.prior_perturb
+        prior_graph = PriorNetwork.perturb(prior_graph, n_changes=n_perturb, seed=args.seed)
         print(f"  原始边数: {len(original_graph.get_edges())}, "
-              f"变异后边数: {len(prior_graph.get_edges())}")
+              f"扰动 {n_perturb} 次后边数: {len(prior_graph.get_edges())}")
     print(f"  网络: {args.model}, 节点: {len(node_names)}")
 
     # ── 2. 准备数据 ──────────────────────────────────────────
@@ -279,6 +286,7 @@ def _run_single(args):
             "mutation_prob": args.mutation_prob,
             "mutation_ops_min": args.mutation_ops_min,
             "mutation_ops_max": args.mutation_ops_max,
+            "prior_perturb": n_perturb,
             "max_sdiff": max_sdiff,
             "max_parents": args.max_parents,
             "mdl_penalty": args.mdl_penalty,
@@ -343,6 +351,7 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
         "--mutation-prob", str(args.mutation_prob),
         "--mutation-ops-min", str(args.mutation_ops_min),
         "--mutation-ops-max", str(args.mutation_ops_max),
+        "--prior-perturb", str(args.prior_perturb),
         "--model", args.model,
         "--seed", str(seed),
         "--output", output_dir,
@@ -376,13 +385,16 @@ def _run_batch(args):
 
         if args.bif:
             prior_graph, node_names, n_states = PriorNetwork.from_bif(args.bif)
+            n_perturb = 0  # BIF 文件不做扰动
         else:
             prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(args.model)
-            prior_graph = PriorNetwork.perturb(prior_graph, n_changes=6, seed=9999)
+            n_perturb = _compute_prior_perturb(len(prior_graph.get_edges())) if args.prior_perturb is None else args.prior_perturb
+            prior_graph = PriorNetwork.perturb(prior_graph, n_changes=n_perturb, seed=9999)
+        args.prior_perturb = n_perturb
         with open(prior_file, "wb") as f:
             pickle.dump((prior_graph, node_names, n_states), f)
         print(f"  共享先验: {len(node_names)} 节点, "
-              f"{len(prior_graph.get_edges())} 边")
+              f"{len(prior_graph.get_edges())} 边 (扰动 {n_perturb} 次)")
 
         if args.bif:
             from pgmpy.readwrite import BIFReader
@@ -483,6 +495,7 @@ def _run_batch(args):
         "mutation_prob": args.mutation_prob,
         "mutation_ops_min": args.mutation_ops_min,
         "mutation_ops_max": args.mutation_ops_max,
+        "prior_perturb": args.prior_perturb,
         "max_sdiff": args.max_sdiff,
         "max_parents": args.max_parents,
         "mdl_penalty": args.mdl_penalty,
@@ -518,6 +531,15 @@ def _get_git_commit() -> str:
         ).decode().strip()
     except Exception:
         return "unknown"
+
+
+def _compute_prior_perturb(prior_edges: int) -> int:
+    """计算先验扰动次数的默认值。
+
+    使用 sqrt(E_prior) 实现子线性缩放，保底 3 次。
+    """
+    import math
+    return max(3, int(math.sqrt(prior_edges)))
 
 
 def _compute_max_sdiff(n_nodes: int, max_parents: int | None,
