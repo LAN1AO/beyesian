@@ -159,6 +159,15 @@ def main():
 # 单次运行
 # ═══════════════════════════════════════════════════════════════
 
+def _load_prior_file(path: str) -> tuple["DirectedGraph", list[str], list[int]]:
+    """加载先验网络文件，兼容旧格式 (tuple) 和新格式 (dict)。"""
+    with open(path, "rb") as f:
+        obj = pickle.load(f)
+    if isinstance(obj, dict):
+        return obj["graph"], obj["node_names"], obj["n_states"]
+    return obj  # 旧格式: (graph, node_names, n_states)
+
+
 def _run_single(args):
     """单次 MOEA/D 运行。"""
     os.makedirs(args.output, exist_ok=True)
@@ -167,8 +176,7 @@ def _run_single(args):
     print(f"[1/5] 加载先验网络...")
     original_graph = None
     if args.prior_file:
-        with open(args.prior_file, "rb") as f:
-            prior_graph, node_names, n_states = pickle.load(f)
+        prior_graph, node_names, n_states = _load_prior_file(args.prior_file)
         n_perturb = 0  # 从文件加载，不扰动
         print(f"  从文件加载先验: {args.prior_file}")
     elif args.bif:
@@ -411,7 +419,7 @@ def _run_batch(args):
     else:
         print(f"共享文件已存在，跳过生成: {shared_dir}/")
         with open(prior_file, "rb") as f:
-            prior_graph, node_names, n_states = pickle.load(f)
+            prior_graph, node_names, n_states = _load_prior_file(prior_file)
 
     # 自动计算 max_sdiff 理论最大值
     if args.max_sdiff is None:
@@ -557,8 +565,7 @@ def _peek_n_nodes(bif_path: str | None, model_name: str,
                    prior_file: str | None = None) -> int:
     """快速获取模型的节点数。"""
     if prior_file:
-        with open(prior_file, "rb") as f:
-            _, names, _ = pickle.load(f)
+        _, names, _ = _load_prior_file(prior_file)
         return len(names)
     if bif_path:
         from pgmpy.readwrite import BIFReader
