@@ -159,13 +159,22 @@ def main():
 # 单次运行
 # ═══════════════════════════════════════════════════════════════
 
-def _load_prior_file(path: str) -> tuple["DirectedGraph", list[str], list[int]]:
-    """加载先验网络文件，兼容旧格式 (tuple) 和新格式 (dict)。"""
+def _load_prior_file(path: str) -> tuple["DirectedGraph", list[str], list[int], list[int] | None]:
+    """加载先验网络文件，兼容旧格式 (tuple) 和新格式 (dict)。
+
+    Returns:
+        (graph, node_names, n_states, known_node_indices)
+        known_node_indices: None=全部已知(旧格式), list=已知节点索引
+    """
     with open(path, "rb") as f:
         obj = pickle.load(f)
     if isinstance(obj, dict):
-        return obj["graph"], obj["node_names"], obj["n_states"]
-    return obj  # 旧格式: (graph, node_names, n_states)
+        known = obj.get("known_node_indices", None)
+        # empty 先验: 全部节点已知但无边
+        if known is None and obj.get("prior_type") == "empty":
+            known = list(range(len(obj["node_names"])))
+        return obj["graph"], obj["node_names"], obj["n_states"], known
+    return obj[0], obj[1], obj[2], None  # 旧格式: 全部节点已知
 
 
 def _run_single(args):
@@ -175,10 +184,15 @@ def _run_single(args):
     # ── 1. 加载先验网络 ──────────────────────────────────────
     print(f"[1/5] 加载先验网络...")
     original_graph = None
+    known_node_indices = None  # 默认: 全部节点已知
     if args.prior_file:
-        prior_graph, node_names, n_states = _load_prior_file(args.prior_file)
+        prior_graph, node_names, n_states, known_node_indices = _load_prior_file(args.prior_file)
         n_perturb = 0  # 从文件加载，不扰动
-        print(f"  从文件加载先验: {args.prior_file}")
+        if known_node_indices is not None:
+            print(f"  从文件加载先验: {args.prior_file}"
+                  f" (已知节点: {len(known_node_indices)}/{len(node_names)})")
+        else:
+            print(f"  从文件加载先验: {args.prior_file}")
     elif args.bif:
         prior_graph, node_names, n_states = PriorNetwork.from_bif(args.bif)
         n_perturb = 0  # BIF 文件不做扰动
@@ -208,8 +222,10 @@ def _run_single(args):
     # 自动计算 max_sdiff 理论最大值
     if args.max_sdiff is None:
         n_prior_edges = len(prior_graph.get_edges())
-        max_sdiff = _compute_max_sdiff(len(node_names), args.max_parents, n_prior_edges)
-        print(f"  max_sdiff 自动计算: {len(node_names)}×{args.max_parents or (len(node_names)-1)}"
+        max_sdiff = _compute_max_sdiff(len(node_names), args.max_parents,
+                                        n_prior_edges, known_node_indices)
+        n_known = len(known_node_indices) if known_node_indices is not None else len(node_names)
+        print(f"  max_sdiff 自动计算: {n_known}×{args.max_parents or (len(node_names)-1)}"
               f"+{n_prior_edges} = {max_sdiff}")
     else:
         max_sdiff = args.max_sdiff
@@ -220,6 +236,7 @@ def _run_single(args):
         max_parents=args.max_parents,
         mdl_penalty_scale=args.mdl_penalty,
         max_symmetric_diff=max_sdiff,
+        known_node_indices=known_node_indices,
         n_weight_vectors=args.pop_size,
         n_neighbors=args.neighbors,
         n_generations=args.generations,
@@ -418,8 +435,7 @@ def _run_batch(args):
         print(f"  共享数据: {data.shape[0]} 样本")
     else:
         print(f"共享文件已存在，跳过生成: {shared_dir}/")
-        with open(prior_file, "rb") as f:
-            prior_graph, node_names, n_states = _load_prior_file(prior_file)
+        prior_graph, node_names, n_states, _ = _load_prior_file(prior_file)
 
     # 自动计算 max_sdiff 理论最大值
     if args.max_sdiff is None:
@@ -551,21 +567,24 @@ def _compute_prior_perturb(prior_edges: int) -> int:
 
 
 def _compute_max_sdiff(n_nodes: int, max_parents: int | None,
-                        prior_edges: int) -> int:
+                        prior_edges: int,
+                        known_node_indices: list[int] | None = None) -> int:
     """计算 sdiff 的理论最大值。
 
-    max_sdiff = n_nodes × K + E_prior
-    其中 K = max_parents（若未限制则为 n_nodes - 1，即完全 DAG 每节点最多父节点数）。
+    max_sdiff = n_known × K + E_prior_known
+    其中 K = max_parents（若未限制则为 n_nodes - 1）。
+    当 known_node_indices 为 None 时，全部节点已知。
     """
     K = max_parents if max_parents is not None else (n_nodes - 1)
-    return n_nodes * K + prior_edges
+    n_known = len(known_node_indices) if known_node_indices is not None else n_nodes
+    return n_known * K + prior_edges
 
 
 def _peek_n_nodes(bif_path: str | None, model_name: str,
                    prior_file: str | None = None) -> int:
     """快速获取模型的节点数。"""
     if prior_file:
-        _, names, _ = _load_prior_file(prior_file)
+        _, names, _, _ = _load_prior_file(prior_file)
         return len(names)
     if bif_path:
         from pgmpy.readwrite import BIFReader

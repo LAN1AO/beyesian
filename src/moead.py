@@ -80,7 +80,8 @@ class MOEAD:
         # 初始化评分模块
         self.mdl_score = MDLScore(data, config.n_states,
                                    penalty_scale=config.mdl_penalty_scale)
-        self.sdiff_score = StructuralDiffScore(prior_graph)
+        self.sdiff_score = StructuralDiffScore(
+            prior_graph, known_node_indices=config.known_node_indices)
 
         # 组合评分缓存: (node, frozenset(parents)) → (mdl, sdiff)
         self._score_cache: dict[tuple, tuple[float, float]] = {}

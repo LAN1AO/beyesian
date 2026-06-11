@@ -112,18 +112,32 @@ class StructuralDiffScore:
 
     σ_i = |Π_i(B_s) ∪ Π_i(B_sc)| - |Π_i(B_s) ∩ Π_i(B_sc)|
     σ   = Σ_i σ_i
+
+    当 known_node_indices 不为 None 时，仅对已知节点计算 Sdiff，
+    且仅比较候选父集中的已知节点。未知节点的 Sdiff 恒为 0。
     """
 
-    def __init__(self, prior_graph):
+    def __init__(self, prior_graph, known_node_indices=None):
         """先验网络的父节点集合会被预计算并缓存。"""
         self.n_nodes = prior_graph.n_nodes
         self._prior_parents: list[set[int]] = [
             set(prior_graph.get_parents(i)) for i in range(self.n_nodes)
         ]
+        if known_node_indices is not None:
+            self._known_set: set[int] | None = set(known_node_indices)
+        else:
+            self._known_set = None  # None = 全部节点已知
 
     def score_node(self, node: int, parents: list[int]) -> float:
         """计算单个节点的结构对称差。"""
+        # 未知节点：Sdiff 恒为 0
+        if self._known_set is not None and node not in self._known_set:
+            return 0.0
+
         p_candidate = set(parents)
+        if self._known_set is not None:
+            p_candidate &= self._known_set  # 仅比较已知父节点
+
         p_prior = self._prior_parents[node]
         union_size = len(p_candidate | p_prior)
         intersect_size = len(p_candidate & p_prior)

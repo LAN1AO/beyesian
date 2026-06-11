@@ -19,6 +19,9 @@ class MOEADConfig:
     # --- 搜索空间约束 ---
     max_symmetric_diff: int = 10  # 结构对称差总和上限
 
+    # --- 部分先验: 已知节点索引 (None = 全部已知) ---
+    known_node_indices: list[int] | None = None
+
     # --- MOEA/D 参数 ---
     n_weight_vectors: int = 50  # 权重向量数 (种群大小)
     n_neighbors: int = 10  # 邻居数量 T
