@@ -11,34 +11,36 @@ source venv/bin/activate
 ## 基础用法
 
 ```bash
-# 单次运行 — Asia 网络 (8节点)
-python3 main.py --model asia
+# 1. 预生成实验数据（一次性）
+python scripts/prepare_data.py
 
-# 单次运行 — Alarm 网络 (37节点)
-python3 main.py --model alarm --pop-size 100 --generations 500 \
-    --max-sdiff 50 --n-samples 5000 --max-parents 4
+# 2. 单次运行 — 空图先验 + 500 样本
+python3 main.py \
+    --prior-file data/priors/asia_empty.pkl \
+    --data-file data/synthetic/asia_N500.npy
 
-# Batch 并行 — 同一先验+同一数据，跑 20 次汇总
-python3 main.py --model alarm --batch 20 \
-    --pop-size 100 --generations 10000 --n-samples 5000 \
-    --max-sdiff 50 --max-parents 4
+# 3. 单次运行 — 部分先验 (50% 节点已知) + 5000 样本
+python3 main.py \
+    --prior-file data/priors/alarm_pct050.pkl \
+    --data-file data/synthetic/alarm_N5000.npy \
+    --pop-size 100 --generations 500 --max-parents 4
+
+# 4. Batch 并行 — 同一先验+同一数据，跑 20 次汇总
+python3 main.py \
+    --prior-file data/priors/alarm_empty.pkl \
+    --data-file data/synthetic/alarm_N5000.npy \
+    --batch 20 --workers 8 \
+    --pop-size 100 --generations 500 --max-parents 4
 ```
 
 ## 参数说明
 
-### 先验网络
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--model` | `asia` | bnlearn 网络名，可选 `alarm`, `sachs`, `child`, `insurance` 等 |
-| `--bif` | 无 | BIF 文件路径，优先级高于 `--model` |
-| `--prior-file` | 无 | 预生成先验 (.pkl)，batch 模式自动使用 |
-| `--prior-perturb` | 自动计算 | 先验网络扰动次数 (默认: max(3, ⌊√E_prior⌋)) |
-
-### 数据
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--n-samples` | `500` | 合成数据的样本数 |
-| `--data-file` | 无 | 预生成数据 (.npy)，batch 模式自动使用 |
+### 先验网络与数据 (必填)
+| 参数 | 说明 |
+|------|------|
+| `--prior-file` | 预生成先验网络文件 (.pkl)，由 `scripts/prepare_data.py` 生成 |
+| `--data-file` | 预生成数据文件 (.npy)，由 `scripts/prepare_data.py` 生成 |
+| `--model` | 网络名称标签 (可选，默认从 prior 文件名推断) |
 
 ### MOEA/D 核心
 | 参数 | 默认值 | 说明 |
@@ -77,33 +79,47 @@ python3 main.py --model alarm --batch 20 \
 ## 常用示例
 
 ```bash
-# 快速测试 (小规模)
-python3 main.py --model asia --pop-size 21 --generations 50 --neighbors 5
+# 快速测试 — Asia + 空图先验
+python3 main.py \
+    --prior-file data/priors/asia_empty.pkl \
+    --data-file data/synthetic/asia_N500.npy \
+    --pop-size 21 --generations 50 --neighbors 5
 
-# 正式运行 (Alarm 网络, 37节点)
-python3 main.py --model alarm --pop-size 100 --generations 500 \
-    --max-sdiff 50 --n-samples 5000 --max-parents 4
+# 正式运行 — Alarm 完整先验
+python3 main.py \
+    --prior-file data/priors/alarm_pct100.pkl \
+    --data-file data/synthetic/alarm_N5000.npy \
+    --pop-size 100 --generations 500 --max-parents 4
 
-# 使用自定义 BIF 先验
-python3 main.py --bif ./data/my_network.bif --generations 200
+# 部分先验 (30% 节点已知)
+python3 main.py \
+    --prior-file data/priors/alarm_pct030.pkl \
+    --data-file data/synthetic/alarm_N5000.npy \
+    --pop-size 100 --generations 500
 
 # 轻惩罚 (鼓励更复杂的图)
-python3 main.py --model asia --mdl-penalty 0.5
+python3 main.py \
+    --prior-file data/priors/asia_pct100.pkl \
+    --data-file data/synthetic/asia_N500.npy \
+    --mdl-penalty 0.5
 ```
 
 ## Batch 模式详解
 
 Batch 模式 (`--batch N`)：
 
-1. 预生成**共享先验网络**（原始图变异 6 次，seed=9999）和**共享数据集**（seed=9999）
+1. 所有 worker 共享同一份先验网络和数据文件
 2. 并行启动 N 个独立进程，每个使用不同 seed (42..41+N) 运行 MOEA/D
 3. 汇总所有运行结果，计算全局非支配前沿
 
 ```bash
 # 30 次并行，8 worker
-python3 main.py --model alarm --batch 30 --workers 8 \
-    --pop-size 100 --generations 10000 --n-samples 5000 \
-    --max-sdiff 50 --max-parents 4 --output ./output/batch_alarm
+python3 main.py \
+    --prior-file data/priors/alarm_empty.pkl \
+    --data-file data/synthetic/alarm_N5000.npy \
+    --batch 30 --workers 8 \
+    --pop-size 100 --generations 10000 --max-parents 4 \
+    --output ./output/batch_alarm
 ```
 
 ## 输出文件
@@ -124,8 +140,6 @@ python3 main.py --model alarm --batch 30 --workers 8 \
 
 | 文件 | 说明 |
 |------|------|
-| `shared/prior.pkl` | 共享先验网络 |
-| `shared/data.npy` | 共享数据集 |
 | `batch_<seed>/` | 各次运行的独立输出目录 |
 | `combined_pareto.png` | 全部运行的 Pareto 前沿汇总图 |
 | `params.json` | 实验参数记录 |
@@ -133,21 +147,24 @@ python3 main.py --model alarm --batch 30 --workers 8 \
 ## 编程接口
 
 ```python
+import pickle, numpy as np
 from src.config import MOEADConfig
-from src.prior import PriorNetwork
 from src.moead import MOEAD
 from src.visualize import plot_pareto_front
 
-# 加载先验
-prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model("asia")
+# 加载先验网络和数据（预生成文件）
+with open("data/priors/asia_empty.pkl", "rb") as f:
+    obj = pickle.load(f)
+prior_graph = obj["graph"]
+node_names = obj["node_names"]
+n_states = obj["n_states"]
 
-# 生成数据
-data, _, _ = PriorNetwork.generate_data("asia", n_samples=500, seed=42)
+data = np.load("data/synthetic/asia_N500.npy").astype(np.int32)
 
 # 配置
 config = MOEADConfig(
     n_nodes=len(node_names), n_states=n_states,
-    max_symmetric_diff=15,
+    max_symmetric_diff=50,
     n_weight_vectors=50, n_neighbors=10, n_generations=200,
     data=data, random_seed=42,
 )
