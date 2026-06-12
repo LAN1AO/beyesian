@@ -1,12 +1,18 @@
 """多目标贝叶斯网络结构学习 — CLI 入口。
 
-使用 MOEA/D + 切比雪夫分解，优化 MDL 评分和结构对称差。
+使用 MOEA/D + 切比雪夫分解，同时优化 MDL 评分和结构对称差。
+先验网络和数据需通过 scripts/prepare_data.py 预生成。
 
 单次运行:
-  python3 main.py --model alarm --pop-size 100 --generations 500
+  python3 main.py --prior-file data/priors/alarm_empty.pkl \\
+      --data-file data/synthetic/alarm_N5000.npy \\
+      --ground-truth data/ground_truth/alarm_graph.pkl \\
+      --pop-size 100 --generations 500
 
 并行 batch 运行 (N=20):
-  python3 main.py --model alarm --batch 20 --pop-size 100 --generations 10000
+  python3 main.py --prior-file data/priors/alarm_empty.pkl \\
+      --data-file data/synthetic/alarm_N5000.npy \\
+      --batch 20 --workers 8 --pop-size 100 --generations 500
 """
 
 from __future__ import annotations
@@ -23,7 +29,6 @@ import numpy as np
 from src.config import MOEADConfig
 from src.metrics import compute_shd, compute_f1
 from src.moead import MOEAD
-# (先验网络通过 _load_prior_file 从 .pkl 文件加载)
 from src.visualize import (
     plot_convergence,
     plot_objective_convergence,
