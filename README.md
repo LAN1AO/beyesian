@@ -19,13 +19,20 @@ python3 main.py \
     --prior-file data/priors/asia_empty.pkl \
     --data-file data/synthetic/asia_N500.npy
 
-# 3. 单次运行 — 部分先验 (50% 节点已知) + 5000 样本
+# 3. 单次运行 — 带真实图评估 (输出 SHD/F1)
+python3 main.py \
+    --prior-file data/priors/alarm_empty.pkl \
+    --data-file data/synthetic/alarm_N5000.npy \
+    --ground-truth data/ground_truth/alarm_graph.pkl \
+    --pop-size 100 --generations 500 --max-parents 4
+
+# 4. 单次运行 — 部分先验 (50% 节点已知)
 python3 main.py \
     --prior-file data/priors/alarm_pct050.pkl \
     --data-file data/synthetic/alarm_N5000.npy \
     --pop-size 100 --generations 500 --max-parents 4
 
-# 4. Batch 并行 — 同一先验+同一数据，跑 20 次汇总
+# 5. Batch 并行 — 同一先验+数据，跑 20 次汇总
 python3 main.py \
     --prior-file data/priors/alarm_empty.pkl \
     --data-file data/synthetic/alarm_N5000.npy \
@@ -40,7 +47,12 @@ python3 main.py \
 |------|------|
 | `--prior-file` | 预生成先验网络文件 (.pkl)，由 `scripts/prepare_data.py` 生成 |
 | `--data-file` | 预生成数据文件 (.npy)，由 `scripts/prepare_data.py` 生成 |
-| `--model` | 网络名称标签 (可选，默认从 prior 文件名推断) |
+
+### 可选
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--ground-truth` | 无 | 真实图文件 (.pkl)，标注 GT 位置并输出 SHD/F1 到 CSV |
+| `--model` | prior 文件名 | 网络名称标签 (仅用于 `params.json` 和图表标题) |
 
 ### MOEA/D 核心
 | 参数 | 默认值 | 说明 |
@@ -59,7 +71,7 @@ python3 main.py \
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--max-parents` | 无限制 | 每个节点最大父节点数 |
-| `--max-sdiff` | 自动计算 | 结构对称差总和上限 (默认: n×max_parents+E_prior) |
+| `--max-sdiff` | 自动计算 | 结构对称差总和上限 (默认: n_known×K+E_prior，K=max_parents 或 n-1) |
 | `--mdl-penalty` | `1.0` | MDL 惩罚项缩放 (1.0=标准BIC，越小惩罚越轻) |
 
 ### Batch 模式
@@ -97,6 +109,13 @@ python3 main.py \
     --data-file data/synthetic/alarm_N5000.npy \
     --pop-size 100 --generations 500
 
+# 带真实图评估 (输出 SHD/F1 指标)
+python3 main.py \
+    --prior-file data/priors/alarm_pct100.pkl \
+    --data-file data/synthetic/alarm_N5000.npy \
+    --ground-truth data/ground_truth/alarm_graph.pkl \
+    --pop-size 100 --generations 500
+
 # 轻惩罚 (鼓励更复杂的图)
 python3 main.py \
     --prior-file data/priors/asia_pct100.pkl \
@@ -129,7 +148,7 @@ python3 main.py \
 | 文件 | 说明 |
 |------|------|
 | `result.pkl` | 完整 MOEADResult 对象 |
-| `pareto_front.csv` | Pareto 前沿解 (index,edges,mdl,sdiff,count) |
+| `pareto_front.csv` | Pareto 前沿解 (index,edges,mdl,sdiff[,shd,f1],count) |
 | `params.json` | 本次实验的完整参数记录 |
 | `pareto_front.png` | Pareto 前沿散点图 (全部解 + 先验/原始网络标记) |
 | `convergence.png` | Pareto 解数量收敛曲线 |
