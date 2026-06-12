@@ -49,6 +49,10 @@ def main():
         "--model", type=str, default=None,
         help="网络名称标签 (默认: 从数据文件推断)",
     )
+    parser.add_argument(
+        "--ground-truth", type=str, default=None,
+        help="真实图文件 (.pkl)，用于标注 GT 位置并计算 SHD/F1 指标",
+    )
 
     # MOEA/D 参数
     parser.add_argument(
@@ -250,15 +254,51 @@ def _run_single(args):
         pickle.dump(result, f)
     print(f"  结果: {result_path}")
 
-    # 保存 Pareto 前沿 CSV（合并重复解，标记数量）
+    # 加载真实图 (可选)
+    gt_graph = None
+    gt_pos = None
+    gt_edges_set = None
+    if args.ground_truth:
+        gt_graph, _, _ = _load_prior_file(args.ground_truth)[:3]
+        gt_edges = gt_graph.get_edges()
+        gt_edges_set = set(gt_edges)
+        # 计算 GT 在目标空间中的位置
+        from src.score import MDLScore, StructuralDiffScore
+        mdl_scorer = MDLScore(data, n_states, penalty_scale=args.mdl_penalty)
+        sdiff_scorer = StructuralDiffScore(prior_graph)
+        gt_pos = (mdl_scorer.score_graph(gt_graph),
+                  sdiff_scorer.score_graph(gt_graph))
+        print(f"  真实图: {len(gt_edges)} 边, MDL={gt_pos[0]:.2f}, Sdiff={gt_pos[1]:.0f}")
+
+    # 保存 Pareto 前沿 CSV
     pareto_path = os.path.join(args.output, "pareto_front.csv")
+    sorted_pf = sorted(pf_counts.items(), key=lambda x: (x[0][2], x[0][1]))
+    if gt_graph is not None:
+        header = "index,edges,mdl,sdiff,shd,f1,count\n"
+    else:
+        header = "index,edges,mdl,sdiff,count\n"
     with open(pareto_path, "w") as f:
-        f.write("index,edges,mdl,sdiff,count\n")
-        for i, ((edges, mdl, sdiff), count) in enumerate(
-            sorted(pf_counts.items(), key=lambda x: (x[0][2], x[0][1]))
-        ):
-            f.write(f"{i},{edges},{mdl:.2f},{sdiff},{count}\n")
-    print(f"  Pareto CSV: {pareto_path} ({len(pf_counts)} 个唯一解)")
+        f.write(header)
+        for i, ((edges, mdl, sdiff), count) in enumerate(sorted_pf):
+            if gt_graph is not None:
+                # 找到该唯一解对应的一个实例来计算 SHD/F1
+                for g_obj, f_obj in zip(result.pareto_graphs, result.pareto_f):
+                    key = (int(np.sum(g_obj.adj)), round(f_obj[0], 2), int(f_obj[1]))
+                    if key == (edges, mdl, sdiff):
+                        c_edges = set(g_obj.get_edges())
+                        shd = len(c_edges ^ gt_edges_set)
+                        tp = len(c_edges & gt_edges_set)
+                        fp = len(c_edges - gt_edges_set)
+                        fn = len(gt_edges_set - c_edges)
+                        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+                        f.write(f"{i},{edges},{mdl:.2f},{sdiff},{shd},{f1:.4f},{count}\n")
+                        break
+            else:
+                f.write(f"{i},{edges},{mdl:.2f},{sdiff},{count}\n")
+    extra = ", SHD+F1" if gt_graph is not None else ""
+    print(f"  Pareto CSV: {pareto_path} ({len(pf_counts)} 个唯一解{extra})")
 
     # 保存实验参数（batch 子进程跳过，由 _run_batch 统一输出）
     if not args.no_params:
@@ -267,6 +307,7 @@ def _run_single(args):
         params = {
             "prior_file": args.prior_file,
             "data_file": args.data_file,
+            "ground_truth": args.ground_truth,
             "pop_size": args.pop_size,
             "generations": args.generations,
             "neighbors": args.neighbors,
@@ -293,7 +334,7 @@ def _run_single(args):
         print(f"  生成图表...")
 
         pareto_plot = os.path.join(args.output, "pareto_front.png")
-        plot_pareto_front(result, save_path=pareto_plot)
+        plot_pareto_front(result, save_path=pareto_plot, original_pos=gt_pos)
 
         conv_plot = os.path.join(args.output, "convergence.png")
         plot_convergence(result, save_path=conv_plot)
@@ -339,6 +380,8 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
     if args.max_parents is not None:
         cmd.append("--max-parents")
         cmd.append(str(args.max_parents))
+    if args.ground_truth:
+        cmd.extend(["--ground-truth", args.ground_truth])
 
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
     return output_dir
