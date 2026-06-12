@@ -21,6 +21,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 
 from src.config import MOEADConfig
+from src.metrics import compute_shd, compute_f1
 from src.moead import MOEAD
 # (先验网络通过 _load_prior_file 从 .pkl 文件加载)
 from src.visualize import (
@@ -286,13 +287,8 @@ def _run_single(args):
                     key = (int(np.sum(g_obj.adj)), round(f_obj[0], 2), int(f_obj[1]))
                     if key == (edges, mdl, sdiff):
                         c_edges = set(g_obj.get_edges())
-                        shd = len(c_edges ^ gt_edges_set)
-                        tp = len(c_edges & gt_edges_set)
-                        fp = len(c_edges - gt_edges_set)
-                        fn = len(gt_edges_set - c_edges)
-                        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-                        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-                        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+                        shd = compute_shd(c_edges, gt_edges_set)
+                        f1 = compute_f1(c_edges, gt_edges_set)
                         f.write(f"{i},{edges},{mdl:.2f},{sdiff},{shd},{f1:.4f},{count}\n")
                         break
             else:
