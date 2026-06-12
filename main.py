@@ -22,7 +22,7 @@ import numpy as np
 
 from src.config import MOEADConfig
 from src.moead import MOEAD
-from src.prior import PriorNetwork
+from src.prior import PriorNetwork, compute_n_perturb
 from src.visualize import (
     plot_convergence,
     plot_objective_convergence,
@@ -199,7 +199,7 @@ def _run_single(args):
     else:
         prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(args.model)
         original_graph = prior_graph.copy()
-        n_perturb = _compute_prior_perturb(len(original_graph.get_edges())) if args.prior_perturb is None else args.prior_perturb
+        n_perturb = compute_n_perturb(len(original_graph.get_edges())) if args.prior_perturb is None else args.prior_perturb
         prior_graph = PriorNetwork.perturb(prior_graph, n_changes=n_perturb, seed=args.seed)
         print(f"  原始边数: {len(original_graph.get_edges())}, "
               f"扰动 {n_perturb} 次后边数: {len(prior_graph.get_edges())}")
@@ -413,7 +413,7 @@ def _run_batch(args):
             n_perturb = 0  # BIF 文件不做扰动
         else:
             prior_graph, node_names, n_states = PriorNetwork.from_pgmpy_model(args.model)
-            n_perturb = _compute_prior_perturb(len(prior_graph.get_edges())) if args.prior_perturb is None else args.prior_perturb
+            n_perturb = compute_n_perturb(len(prior_graph.get_edges())) if args.prior_perturb is None else args.prior_perturb
             prior_graph = PriorNetwork.perturb(prior_graph, n_changes=n_perturb, seed=9999)
         args.prior_perturb = n_perturb
         with open(prior_file, "wb") as f:
@@ -555,15 +555,6 @@ def _get_git_commit() -> str:
         ).decode().strip()
     except Exception:
         return "unknown"
-
-
-def _compute_prior_perturb(prior_edges: int) -> int:
-    """计算先验扰动次数的默认值。
-
-    使用 sqrt(E_prior) 实现子线性缩放，保底 3 次。
-    """
-    import math
-    return max(3, int(math.sqrt(prior_edges)))
 
 
 def _compute_max_sdiff(n_nodes: int, max_parents: int | None,

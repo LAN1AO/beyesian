@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+import math
 import random
 
 from src.graph import DirectedGraph
+
+
+def compute_n_perturb(n_edges: int) -> int:
+    """计算先验扰动次数的默认值。
+
+    使用 sqrt(E) 实现子线性缩放，保底 3 次。零边时不扰动。
+    """
+    if n_edges == 0:
+        return 0
+    return max(3, int(math.sqrt(n_edges)))
 
 
 class PriorNetwork:

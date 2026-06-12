@@ -20,9 +20,10 @@ from argparse import ArgumentParser
 import numpy as np
 
 # 确保项目根在 path 中
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 
-from src.prior import PriorNetwork
+from src.prior import PriorNetwork, compute_n_perturb
 from src.graph import DirectedGraph
 
 # ── 配置 ──────────────────────────────────────────────────────────────
@@ -34,15 +35,7 @@ SEED_DATA = 9999
 SEED_NODE_SAMPLE = 9999
 SEED_PERTURB = 9999
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(ROOT, "data")
-
-
-def compute_n_perturb(n_edges: int) -> int:
-    """先验扰动次数：max(3, floor(sqrt(E)))。0 边时不扰动。"""
-    if n_edges == 0:
-        return 0
-    return max(3, int(math.sqrt(n_edges)))
 
 
 # ── Ground Truth ──────────────────────────────────────────────────────
@@ -155,7 +148,6 @@ def generate_coverage_prior(
     3. 应用 perturb
     """
     rng_nodes = random.Random(SEED_NODE_SAMPLE)
-    rng_perturb = random.Random(SEED_PERTURB)
 
     n_nodes = len(node_names)
     known_indices = _sample_nodes(n_nodes, coverage_pct, rng_nodes)
@@ -191,11 +183,11 @@ def save_prior(network: str, prior_data: dict, suffix: str):
     graph = prior_data["graph"]
     n_edges = len(graph.get_edges())
     if "prior_type" in prior_data:
-        print(f"  [PRIOR] {network} empty: {n_edges} 边 → {path}")
+        detail = f"empty: {n_edges} 边"
     else:
         pct = prior_data["coverage_pct"]
-        n_known = len(prior_data["known_node_indices"])
-        print(f"  [PRIOR] {network} pct={pct:.0%}: {n_known} 节点, {n_edges} 边 → {path}")
+        detail = f"pct={pct:.0%}: {len(prior_data['known_node_indices'])} 节点, {n_edges} 边"
+    print(f"  [PRIOR] {network} {detail} → {path}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────
