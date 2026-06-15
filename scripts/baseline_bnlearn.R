@@ -7,7 +7,15 @@ input_csv  <- args[1]
 output_csv <- args[2]
 
 df <- read.csv(input_csv)
-df[] <- lapply(df, as.factor)
+
+# 转为 factor，确保每列至少 2 个 level (bnlearn 要求)
+df[] <- lapply(df, function(col) {
+  f <- as.factor(col)
+  if (nlevels(f) < 2) {
+    levels(f) <- c(levels(f), as.character(max(as.integer(levels(f))) + 1))
+  }
+  f
+})
 
 algos <- list(
   hc   = function(d) hc(d, score = "bic"),
@@ -21,12 +29,28 @@ results <- data.frame()
 
 for (name in names(algos)) {
   t0 <- proc.time()
-  net <- algos[[name]](df)
-  # 约束类算法可能返回 PDAG (含无向边)，cextend 扩展为完整 DAG
-  net <- cextend(net)
+  net <- tryCatch(algos[[name]](df), error = function(e) NULL)
+  if (is.null(net)) {
+    # 算法本身失败，跳过
+    results <- rbind(results, data.frame(
+      algorithm = name, from = "", to = "", runtime_sec = 0,
+      stringsAsFactors = FALSE))
+    next
+  }
+
+  # 约束类算法返回 PDAG，尝试 cextend 转为 DAG
+  net <- tryCatch(cextend(net), error = function(e) net)
   dt <- (proc.time() - t0)["elapsed"]
 
   edges <- arcs(net)
+  # 过滤掉双向边 (PDAG 中无向边表示为双向)，仅保留单向
+  if (nrow(edges) > 0) {
+    edge_pairs <- paste(edges[, "from"], edges[, "to"], sep = "->")
+    reverse_pairs <- paste(edges[, "to"], edges[, "from"], sep = "->")
+    is_undirected <- edge_pairs %in% reverse_pairs
+    edges <- edges[!is_undirected, , drop = FALSE]
+  }
+
   if (nrow(edges) > 0) {
     block <- data.frame(
       algorithm   = name,
@@ -36,7 +60,6 @@ for (name in names(algos)) {
       stringsAsFactors = FALSE
     )
   } else {
-    # 零边时仍输出一行 (from/to 为空字符串)，保证 Python 端能读到此算法
     block <- data.frame(
       algorithm   = name,
       from        = "",
