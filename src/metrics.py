@@ -4,6 +4,11 @@
 """
 
 
+def _to_skeleton(edges: set[tuple[int, int]]) -> set[frozenset]:
+    """有向边集 → 无向骨架（frozenset 对）。"""
+    return {frozenset(e) for e in edges}
+
+
 def compute_shd(
     candidate_edges: set[tuple[int, int]],
     gt_edges: set[tuple[int, int]],
@@ -13,6 +18,14 @@ def compute_shd(
     SHD = 两图边的对称差数量 = 多余边 + 缺失边 + 反向边。
     """
     return len(candidate_edges ^ gt_edges)
+
+
+def compute_shd_skeleton(
+    candidate_edges: set[tuple[int, int]],
+    gt_edges: set[tuple[int, int]],
+) -> int:
+    """骨架级 SHD：忽略边方向，仅比较是否有边。"""
+    return len(_to_skeleton(candidate_edges) ^ _to_skeleton(gt_edges))
 
 
 def compute_f1(
@@ -29,6 +42,23 @@ def compute_f1(
     fp = len(candidate_edges - gt_edges)
     fn = len(gt_edges - candidate_edges)
 
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
+
+
+def compute_f1_skeleton(
+    candidate_edges: set[tuple[int, int]],
+    gt_edges: set[tuple[int, int]],
+) -> float:
+    """骨架级 F1：忽略边方向，仅比较是否有边。"""
+    cand_skel = _to_skeleton(candidate_edges)
+    gt_skel = _to_skeleton(gt_edges)
+    tp = len(cand_skel & gt_skel)
+    fp = len(cand_skel - gt_skel)
+    fn = len(gt_skel - cand_skel)
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     if precision + recall == 0:

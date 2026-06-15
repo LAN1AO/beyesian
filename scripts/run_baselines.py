@@ -27,7 +27,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from src.graph import DirectedGraph
-from src.metrics import compute_f1, compute_shd
+from src.metrics import compute_f1, compute_f1_skeleton, compute_shd, compute_shd_skeleton
 from src.score import MDLScore
 
 R_SCRIPT = os.path.join(ROOT, "scripts", "baseline_bnlearn.R")
@@ -127,6 +127,8 @@ def _make_row(network, n_samples, algo, graph, edges, gt_edges, mdl_scorer, runt
         "mdl": round(mdl_scorer.score_graph(graph), 2),
         "shd": compute_shd(edges, gt_edges),
         "f1": round(compute_f1(edges, gt_edges), 4),
+        "shd_skel": compute_shd_skeleton(edges, gt_edges),
+        "f1_skel": round(compute_f1_skeleton(edges, gt_edges), 4),
         "runtime_sec": round(runtime, 1),
     }
 
@@ -134,7 +136,8 @@ def _make_row(network, n_samples, algo, graph, edges, gt_edges, mdl_scorer, runt
 def _empty_row(network, n_samples, algo):
     return {
         "network": network, "n_samples": n_samples, "algorithm": algo,
-        "edges": None, "mdl": None, "shd": None, "f1": None, "runtime_sec": None,
+        "edges": None, "mdl": None, "shd": None, "f1": None,
+        "shd_skel": None, "f1_skel": None, "runtime_sec": None,
     }
 
 
@@ -171,7 +174,7 @@ def main():
 
     os.makedirs(OUT_DIR, exist_ok=True)
     csv_path = os.path.join(OUT_DIR, "results.csv")
-    fieldnames = ["network", "n_samples", "algorithm", "edges", "mdl", "shd", "f1", "runtime_sec"]
+    fieldnames = ["network", "n_samples", "algorithm", "edges", "mdl", "shd", "f1", "shd_skel", "f1_skel", "runtime_sec"]
 
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
