@@ -27,7 +27,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 
 from src.config import MOEADConfig
-from src.metrics import compute_shd, compute_f1
+from src.metrics import compute_f1, compute_f1_skeleton, compute_shd, compute_shd_skeleton
 from src.moead import MOEAD
 from src.visualize import (
     plot_convergence,
@@ -280,7 +280,7 @@ def _run_single(args):
     pareto_path = os.path.join(args.output, "pareto_front.csv")
     sorted_pf = sorted(pf_counts.items(), key=lambda x: (x[0][2], x[0][1]))
     if gt_graph is not None:
-        header = "index,edges,mdl,sdiff,shd,f1,count\n"
+        header = "index,edges,mdl,sdiff,shd,f1,shd_skel,f1_skel,count\n"
     else:
         header = "index,edges,mdl,sdiff,count\n"
     with open(pareto_path, "w") as f:
@@ -294,7 +294,9 @@ def _run_single(args):
                         c_edges = set(g_obj.get_edges())
                         shd = compute_shd(c_edges, gt_edges_set)
                         f1 = compute_f1(c_edges, gt_edges_set)
-                        f.write(f"{i},{edges},{mdl:.2f},{sdiff},{shd},{f1:.4f},{count}\n")
+                        shd_s = compute_shd_skeleton(c_edges, gt_edges_set)
+                        f1_s = compute_f1_skeleton(c_edges, gt_edges_set)
+                        f.write(f"{i},{edges},{mdl:.2f},{sdiff},{shd},{f1:.4f},{shd_s},{f1_s:.4f},{count}\n")
                         break
             else:
                 f.write(f"{i},{edges},{mdl:.2f},{sdiff},{count}\n")
