@@ -31,6 +31,7 @@ from src.metrics import compute_f1, compute_shd
 from src.score import MDLScore
 
 R_SCRIPT = os.path.join(ROOT, "scripts", "baseline_bnlearn.R")
+R_LIBS = os.path.join(ROOT, "venv", "R_libs")
 
 # ── 配置 ──────────────────────────────────────────────────────────────────
 
@@ -71,10 +72,11 @@ def run_one(network: str, n_samples: int) -> list[dict]:
         input_csv = f.name
 
     output_csv = input_csv.replace("_in_", "_out_")
+    env = {**os.environ, "R_LIBS_USER": R_LIBS}
     try:
         subprocess.run(
             ["Rscript", R_SCRIPT, input_csv, output_csv],
-            capture_output=True, text=True, check=True, timeout=600,
+            capture_output=True, text=True, check=True, timeout=600, env=env,
         )
     except subprocess.TimeoutExpired:
         return [_empty_row(network, n_samples, algo) for algo in
