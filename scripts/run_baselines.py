@@ -73,14 +73,18 @@ def run_one(network: str, n_samples: int) -> list[dict]:
 
     output_csv = input_csv.replace("_in_", "_out_")
     env = {**os.environ, "R_LIBS_USER": R_LIBS}
+    algo_names = ["HC", "Tabu", "MMHC", "PC-stable", "inter-IAMB"]
     try:
         subprocess.run(
             ["Rscript", R_SCRIPT, input_csv, output_csv],
             capture_output=True, text=True, check=True, timeout=600, env=env,
         )
     except subprocess.TimeoutExpired:
-        return [_empty_row(network, n_samples, algo) for algo in
-                ["HC", "Tabu", "MMHC", "PC-stable", "inter-IAMB"]]
+        print(f"  [TIMEOUT] {network} N={n_samples}", file=sys.stderr)
+        return [_empty_row(network, n_samples, a) for a in algo_names]
+    except subprocess.CalledProcessError as e:
+        print(f"  [R ERROR] {network} N={n_samples}: {e.stderr.strip()}", file=sys.stderr)
+        return [_empty_row(network, n_samples, a) for a in algo_names]
     finally:
         os.unlink(input_csv)
 
@@ -88,8 +92,7 @@ def run_one(network: str, n_samples: int) -> list[dict]:
     try:
         edges_df = pd.read_csv(output_csv)
     except Exception:
-        return [_empty_row(network, n_samples, algo) for algo in
-                ["HC", "Tabu", "MMHC", "PC-stable", "inter-IAMB"]]
+        return [_empty_row(network, n_samples, a) for a in algo_names]
     finally:
         if os.path.exists(output_csv):
             os.unlink(output_csv)
