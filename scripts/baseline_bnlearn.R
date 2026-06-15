@@ -22,6 +22,8 @@ results <- data.frame()
 for (name in names(algos)) {
   t0 <- proc.time()
   net <- algos[[name]](df)
+  # 约束类算法可能返回 PDAG (含无向边)，cextend 扩展为完整 DAG
+  net <- cextend(net)
   dt <- (proc.time() - t0)["elapsed"]
 
   edges <- arcs(net)
