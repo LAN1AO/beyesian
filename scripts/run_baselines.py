@@ -50,6 +50,8 @@ OUT_DIR = os.path.join(ROOT, "output", "baselines")
 
 def load_task(network: str, n_samples: int):
     """加载数据、GT 和元信息。返回 (df, gt_edges, n_states, node_names, data_np)。"""
+    if network not in NETWORKS:
+        raise ValueError(f"未知网络: {network}，合法值: {NETWORKS}")
     # GT
     gt_path = os.path.join(DATA_DIR, "ground_truth", f"{network}_graph.pkl")
     with open(gt_path, "rb") as f:
