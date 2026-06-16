@@ -157,6 +157,96 @@ class PriorNetwork:
         return g
 
     @staticmethod
+    def construct_perturbed(
+        gt_graph: DirectedGraph,
+        delete_frac: float,
+        seed: int | None = None,
+        max_parents: int | None = None,
+    ) -> tuple[DirectedGraph, dict]:
+        """按目标 SHD 构造扰动先验。
+
+        从 GT 中删除 d = round(delete_frac × E) 条边，
+        再添加 d 条不在 GT 中的新边（保 DAG + max_parents）。
+        SHD(result, GT) ≈ 2d。
+
+        Returns:
+            (graph, {"edges_deleted": int, "edges_added": int, "shd_from_gt": int})
+        """
+        rng = random.Random(seed)
+        g = gt_graph.copy()
+        if max_parents is not None:
+            g.max_parents = max_parents
+
+        gt_edges = set(gt_graph.get_edges())
+        n = g.n_nodes
+        d = round(delete_frac * len(gt_edges))
+
+        # 1. 随机删除 d 条边
+        to_delete = rng.sample(sorted(gt_edges), d)
+        for u, v in to_delete:
+            g.remove_edge(u, v)
+
+        # 2. 随机添加 d 条新边（不在 GT 边集中）
+        added = 0
+        for _ in range(d * 20):
+            if added >= d:
+                break
+            u = rng.randrange(n)
+            v = rng.randrange(n)
+            if u == v or (u, v) in gt_edges:
+                continue
+            if g.add_edge(u, v):  # 内部检查: 已存在/环/max_parents
+                added += 1
+
+        current_edges = set(g.get_edges())
+        return g, {
+            "edges_deleted": d,
+            "edges_added": added,
+            "shd_from_gt": len(current_edges ^ gt_edges),
+        }
+
+    @staticmethod
+    def random_dag(
+        n_nodes: int,
+        density: float,
+        seed: int | None = None,
+        max_parents: int | None = None,
+    ) -> DirectedGraph:
+        """生成与指定密度匹配的随机 DAG。
+
+        随机拓扑序 + Bernoulli(density) 加边，天然无环。
+        期望边数 ≈ density × C(n,2)。
+
+        Args:
+            n_nodes: 节点数
+            density: 边密度 p = E_target / C(n,2)
+            seed: 随机种子
+            max_parents: 每个节点最大父节点数
+
+        Returns:
+            随机 DAG
+        """
+        rng = random.Random(seed)
+        g = DirectedGraph(n_nodes, max_parents=max_parents)
+
+        # 随机拓扑序
+        order = list(range(n_nodes))
+        rng.shuffle(order)
+
+        # 边只从 order 前方指向后方 → 天然 DAG，无需判环
+        parent_count = [0] * n_nodes
+        for i in range(n_nodes):
+            for j in range(i + 1, n_nodes):
+                v = order[j]
+                if max_parents is not None and parent_count[v] >= max_parents:
+                    continue
+                if rng.random() < density:
+                    g.adj[order[i], v] = 1
+                    parent_count[v] += 1
+
+        return g
+
+    @staticmethod
     def generate_data(
         model_name_or_graph,
         n_samples: int,

@@ -166,9 +166,6 @@ def _load_prior_file(path: str) -> tuple["DirectedGraph", list[str], list[int], 
         obj = pickle.load(f)
     if isinstance(obj, dict):
         known = obj.get("known_node_indices", None)
-        # empty 先验: 全部节点已知但无边
-        if known is None and obj.get("prior_type") == "empty":
-            known = list(range(len(obj["node_names"])))
         return obj["graph"], obj["node_names"], obj["n_states"], known
     return obj[0], obj[1], obj[2], None  # 旧格式: 全部节点已知
 
