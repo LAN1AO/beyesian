@@ -29,6 +29,7 @@ class MOEADResult:
         population: list[DirectedGraph],
         population_f: np.ndarray,
         history: list[np.ndarray],
+        sdiff_history: list[dict],
         ideal: np.ndarray,
         config,
         node_names: list[str],
@@ -39,6 +40,7 @@ class MOEADResult:
         self.population = population
         self.population_f = population_f
         self.history = history
+        self.sdiff_history = sdiff_history
         self.ideal = ideal
         self.config = config
         self.node_names = node_names
@@ -139,6 +141,7 @@ class MOEAD:
         config = self.config
         rng = random.Random(config.random_seed)
         history: list[np.ndarray] = []
+        sdiff_history: list[dict] = []
         t0 = time.time()
 
         for gen in range(config.n_generations):
@@ -213,6 +216,14 @@ class MOEAD:
             pareto_mask = non_dominated_sort(self.F)
             history.append(self.F[pareto_mask].copy())
 
+            # 记录 max/mean sdiff
+            gen_sdiff = self.F[:, 1]
+            sdiff_history.append({
+                "gen": gen,
+                "max_sdiff": float(gen_sdiff.max()),
+                "mean_sdiff": float(gen_sdiff.mean()),
+            })
+
         # 进度条结束后换行
         print()
         runtime = time.time() - t0
@@ -227,6 +238,7 @@ class MOEAD:
             population=self.population,
             population_f=self.F,
             history=history,
+            sdiff_history=sdiff_history,
             ideal=self.ideal,
             config=config,
             node_names=self.node_names,

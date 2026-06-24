@@ -273,6 +273,14 @@ def _run_single(args):
                   sdiff_scorer.score_graph(gt_graph))
         print(f"  真实图: {len(gt_edges)} 边, MDL={gt_pos[0]:.2f}, Sdiff={gt_pos[1]:.0f}")
 
+    # 保存 sdiff 收敛历史 CSV
+    sdiff_hist_path = os.path.join(args.output, "sdiff_history.csv")
+    with open(sdiff_hist_path, "w") as f:
+        f.write("gen,max_sdiff,mean_sdiff\n")
+        for h in result.sdiff_history:
+            f.write(f"{h['gen']},{h['max_sdiff']:.1f},{h['mean_sdiff']:.1f}\n")
+    print(f"  Sdiff 历史: {sdiff_hist_path}")
+
     # 保存 Pareto 前沿 CSV
     pareto_path = os.path.join(args.output, "pareto_front.csv")
     sorted_pf = sorted(pf_counts.items(), key=lambda x: (x[0][2], x[0][1]))
