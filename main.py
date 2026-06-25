@@ -132,6 +132,10 @@ def main():
         "--plot-networks", action="store_true",
         help="输出三个代表解的网络结构图 (默认关闭)",
     )
+    parser.add_argument(
+        "--track-sdiff", action="store_true",
+        help="每代记录 max/mean sdiff 并画收敛曲线图",
+    )
 
     # Batch 模式
     parser.add_argument(
@@ -219,6 +223,7 @@ def _run_single(args):
         mutation_prob=args.mutation_prob,
         mutation_ops_min=args.mutation_ops_min,
         mutation_ops_max=args.mutation_ops_max,
+        track_sdiff=args.track_sdiff,
         data=data,
         output_dir=args.output,
         random_seed=args.seed,
@@ -280,6 +285,13 @@ def _run_single(args):
         for h in result.sdiff_history:
             f.write(f"{h['gen']},{h['max_sdiff']:.1f},{h['mean_sdiff']:.1f}\n")
     print(f"  Sdiff 历史: {sdiff_hist_path}")
+
+    # Sdiff 收敛曲线图（--track-sdiff 时自动画）
+    if args.track_sdiff:
+        from src.visualize import plot_sdiff_convergence
+        sdiff_plot_path = os.path.join(args.output, "sdiff_convergence.png")
+        plot_sdiff_convergence(result.sdiff_history, save_path=sdiff_plot_path)
+        print(f"  Sdiff 收敛图: {sdiff_plot_path}")
 
     # 保存 Pareto 前沿 CSV
     pareto_path = os.path.join(args.output, "pareto_front.csv")
@@ -385,6 +397,8 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
     ]
     if args.plot_networks:
         cmd.append("--plot-networks")
+    if args.track_sdiff:
+        cmd.append("--track-sdiff")
     if args.max_parents is not None:
         cmd.append("--max-parents")
         cmd.append(str(args.max_parents))

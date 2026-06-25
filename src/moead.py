@@ -217,12 +217,13 @@ class MOEAD:
             history.append(self.F[pareto_mask].copy())
 
             # 记录 max/mean sdiff
-            gen_sdiff = self.F[:, 1]
-            sdiff_history.append({
-                "gen": gen,
-                "max_sdiff": float(gen_sdiff.max()),
-                "mean_sdiff": float(gen_sdiff.mean()),
-            })
+            if config.track_sdiff:
+                gen_sdiff = self.F[:, 1]
+                sdiff_history.append({
+                    "gen": gen,
+                    "max_sdiff": float(gen_sdiff.max()),
+                    "mean_sdiff": float(gen_sdiff.mean()),
+                })
 
         # 进度条结束后换行
         print()

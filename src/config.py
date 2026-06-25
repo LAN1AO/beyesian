@@ -46,6 +46,9 @@ class MOEADConfig:
     # --- 切比雪夫归一化 epsilon ---
     eps: float = 1e-8
 
+    # --- Sdiff 收敛追踪 ---
+    track_sdiff: bool = False  # 每代记录 max/mean sdiff 并画图
+
     def __post_init__(self):
         if self.data is not None:
             m, n = self.data.shape

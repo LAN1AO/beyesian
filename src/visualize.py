@@ -388,3 +388,47 @@ def _plot_with_networkx(G, labels: dict, title: str,
         print(f"Network structure saved to: {save_path} (networkx)")
 
     return fig
+
+
+def plot_sdiff_convergence(sdiff_history: list[dict], save_path: str | None = None):
+    """绘制 max_sdiff 和 mean_sdiff 随代数的收敛曲线。
+
+    Args:
+        sdiff_history: MOEA/D 运行记录的 sdiff 历史
+        save_path: 若提供，保存图片到此路径
+    """
+    matplotlib.use("Agg")
+    gens = [h["gen"] for h in sdiff_history]
+    max_vals = [h["max_sdiff"] for h in sdiff_history]
+    mean_vals = [h["mean_sdiff"] for h in sdiff_history]
+
+    fig, ax1 = plt.subplots(figsize=(10, 5))
+
+    ax1.plot(gens, max_vals, lw=1.2, color="#d62728", label="Max Sdiff")
+    ax1.plot(gens, mean_vals, lw=1.0, color="#1f77b4", alpha=0.7,
+             label="Mean Sdiff")
+    ax1.set_xlabel("Generation")
+    ax1.set_ylabel("Structural Difference (from Prior)", color="#d62728")
+    ax1.set_xscale("symlog", linthresh=100)
+    ax1.grid(True, alpha=0.3)
+
+    ax2 = ax1.twiny()
+    ax2.set_xlim(ax1.get_xlim())
+    ax2.set_xscale("symlog", linthresh=100)
+    if len(gens) > 1:
+        tick_gens = [0, 10, 100, 1000, gens[-1]]
+    else:
+        tick_gens = [0]
+    ax2.set_xticks(tick_gens)
+    ax2.set_xticklabels([str(g) for g in tick_gens])
+    ax2.set_xlabel("Generation (key points)")
+
+    ax1.legend(loc="upper right")
+    fig.suptitle("MOEA/D Population Diversity: Sdiff Convergence",
+                 fontweight="bold")
+    fig.tight_layout()
+
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return fig
