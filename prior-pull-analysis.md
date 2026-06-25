@@ -1,6 +1,6 @@
 # 先验牵引力分析：为什么结果总靠近先验，以及如何削弱
 
-> 主题：多目标 MOEA/D（MDL + sdiff）中，最终解系统性靠近先验网络。本文给出文献定位、数据验证、机制诊断（含一个被实测证伪的初始假设）和削弱方案。结论性分析，暂未落地代码改动。
+> 主题：多目标 MOEA/D（MDL + sdiff）中，最终解系统性靠近先验网络。本文给出文献定位、数据验证、机制诊断（含一个被实测证伪的初始假设）、削弱方案与聚合函数选型。结论性分析，暂未落地代码改动。
 
 ---
 
@@ -104,7 +104,63 @@ g(x) = max_i { λ_i · |f_i − ideal_i| / range_i }
 | 2. 权重层偏 mdl | Das-Dennis 权重分布偏 mdl | 小 | 不改聚合；但单个偏 mdl 子问题内部反超仍在，缓解不彻底 |
 | 3. 问题层降级 | sdiff 由硬目标 → 约束 / mdl 正则项 | 大 | 最彻底；但放弃"双目标 MOEA/D"核心卖点 |
 
-**推荐方向 1**：最小改动、对症，且把修复顺势变成论文的一个新实验维度（先验置信度 α）。
+**推荐方向 1** 作为最小改动；但**更根本的方向是第五节的轴 B（重定位锚点）**——它重定向牵引而非削弱，且不损失前沿覆盖。方向 1 顺带把修复变成论文的一个新实验维度（先验置信度 α）。
+
+---
+
+## 五、聚合函数选型：能不能换聚合方式消除牵引？
+
+第四节方向 1 是"在切比雪夫**内**调尺度"。更进一步的问题是：**换一种聚合函数**能否根除牵引？答案取决于两条正交的轴。
+
+### 5.1 加权和：实测直接否决
+
+加权和（WS）的最优永远落在可行目标集的**凸包**上，凹区（unsupported 解）取不到。能否用全看前沿凸凹。实测仓库现有 12 条完整前沿（6 网络 × severe/random，N10000，seed42；脚本 `analyze_convexity.py`）：
+
+| | 前沿点总数 | 加权和会跳过 |
+|---|:---:|:---:|
+| 全部 | 473 | **352（74.4%）** |
+| 大图（>76 节点） | — | **82.5%**（andes 90–92%） |
+| 小图（≤76） | — | 67.2% |
+| asia（8 节点玩具） | — | 0%（唯一真凸） |
+
+**换加权和丢约 3/4 的 Pareto 解，大图丢 80–90%**，被丢的点凹得不轻（高出凸包包络 0.7–5.3% MDL）。原因：离散组合前沿，sdiff 整数步 + MDL 块状增量 → 天然锯齿、布满 unsupported 解。凸凹是结构性几何性质，与先验落点无关（severe 74.1% vs random 74.7%）。
+
+### 5.2 关键洞察：牵引是 `max` 取凹解能力的一体两面
+
+切比雪夫的 `max`（L 形拐角、无限曲率）**既**让它能卡进凹区取 unsupported 解，**也**让 sdiff 在 mdl 饱和后反超牵引——两者是同一性质。所以"软化 max 去牵引"必然以丢凹解为代价：**先验牵引不是单纯 bug，是覆盖非凸前沿的内在代价**。
+
+### 5.3 两条正交的轴
+
+- **轴 A — `max` 软硬**（决定能否取凹解）：`WS(L1) → Lp → PBI → TCH(L∞)`，越硬越能取凹、牵引越强。
+- **轴 B — 锚点**（决定牵引往哪拉）：`ideal`（现状，锚 sdiff≈0=先验）vs `reference point`（可移到偏好位置）。**轴 B 与取凹解能力正交。**
+
+### 5.4 各聚合方式评估
+
+| 聚合 | 取凹解 | 对牵引 | 改动 |
+|---|---|---|---|
+| 加权和 WS | ✗ 丢 74% | — | 小 |
+| 加权 Lp（1<p<∞） | 需 `p>max(kᵢ)` | p 小软化但丢凹，连续可调 | 极小 |
+| PBI（d1+θ·d2） | θ 够大才取凹 | θ 旋钮，机制类 TCH | 中 |
+| 增广 ASF（max+ρΣ） | ✓ | 只解 weakly-Pareto，**不解牵引** | 小 |
+| 切比雪夫 TCH（现状） | ✓ | 牵引最强 | — |
+| **Reference-point（AASF/NUMS）** | ✓ | **重定向牵引（轴 B），不丢覆盖** | 大 |
+| **方向 1：缩 sdiff 尺度 α** | ✓ | 推迟反超、不丢凹解 | 最小 |
+
+**铁律**（[Wang 2015](https://delta.cs.cinvestav.mx/~ccoello/EMOO/abstracts-html/abstract_Wang2015b.html)）：覆盖凹前沿需 Lp 的 `p > max(kᵢ)`（前沿凹度阶数）。我们前沿强非凸 → 需很大 p → 退回 TCH 牵引。**轴 A 上削牵引与取凹解是同一旋钮两端，无免费午餐。**
+
+### 5.5 落地：轴 B 抬锚点
+
+牵引的钉子是 `ideal_sdiff≈0`。把 sdiff 维的锚从 0 抬到"可接受的先验偏离量" s₀：`d_sdiff = |sdiff − s₀| / range`。切比雪夫不再往"纯先验(sdiff=0)"拉，而往"适度偏离先验(sdiff=s₀)"拉——**重定向牵引而非削弱**，且仍是 `max` → 凹解一个不丢。严格保证 Pareto 性套 AASF 的 `+ρ·Σ`（[Wierzbicki ASF](https://www.semanticscholar.org/paper/The-Use-of-Reference-Objectives-in-Multiobjective-Wierzbicki/749f89f035896edf40385f548d2a783d443ae7ae)）。
+
+### 5.6 推荐（三档）
+
+| 档 | 做法 | 性质 |
+|---|---|---|
+| 最小改动 | 方向 1：sdiff 维乘 α<1 | 不动 max 软硬/锚点，只压尺度 |
+| **更有原则（推荐深究）** | 轴 B：sdiff 锚 0→s₀ / AASF 参考点 | 重定向牵引、不丢覆盖 |
+| 连续对照 | 加权 Lp 扫 p 或 PBI 扫 θ | 给"覆盖↔牵引"权衡曲线，受铁律约束 |
+
+> 别在轴 A 找（软化 max 必丢凹解）；真正该动的是轴 B 的锚点——把"贴先验"挪成"适度偏离先验"，牵引被重定向，覆盖毫发无损。方向 1 是其轻量近似。
 
 ---
 
@@ -112,6 +168,7 @@ g(x) = max_i { λ_i · |f_i − ideal_i| / range_i }
 
 - 全量结果：`output/experiments/summary.csv`
 - 假设验证脚本：`analyze_prior_hypothesis.py`（分析 A/B 可复跑）
+- 凸凹分析脚本：`analyze_convexity.py`（加权和覆盖损失，可复跑）
 - 机制实测：alarm + random + N1000，临时打点 800 代（诊断后源码已还原）
 
 **文献来源**：
@@ -122,3 +179,10 @@ g(x) = max_i { λ_i · |f_i − ideal_i| / range_i }
 - [Borboudakis & Tsamardinos, UAI 2013](https://www.stats.ox.ac.uk/~evans/uai13/Borboudakis.pdf)
 - [CaMML technical report, Monash](https://au-east.erc.monash.edu.au/fpfiles/36404490/tr2006194full.pdf)
 - [Niculescu-Mizil & Caruana, AISTATS 2007](https://www.cs.cornell.edu/~caruana/niculescu.mtlbnets.aistats07.pdf)
+
+**聚合函数文献**（第五节）：
+- [Wang, Zhang & Zhang 2015, Pareto Adaptive Scalarising Functions (Lp / MOEA/D-par)](https://delta.cs.cinvestav.mx/~ccoello/EMOO/abstracts-html/abstract_Wang2015b.html)
+- [Ishibuchi et al. 2009, Adaptation of Scalarizing Functions in MOEA/D](https://link.springer.com/chapter/10.1007/978-3-642-01020-0_35)
+- [Wierzbicki, The Use of Reference Objectives in Multiobjective Optimization (ASF)](https://www.semanticscholar.org/paper/The-Use-of-Reference-Objectives-in-Multiobjective-Wierzbicki/749f89f035896edf40385f548d2a783d443ae7ae)
+- [Chen/Deb 2021, Objective Normalization & Penalty Parameter on PBI](https://pubmed.ncbi.nlm.nih.gov/32567957/)
+- [Sato 2014, Inverted PBI](https://dl.acm.org/doi/epdf/10.1145/2576768.2598297)
