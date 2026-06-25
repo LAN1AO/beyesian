@@ -49,10 +49,11 @@ OUT_DIR = os.path.join(ROOT, "output", "experiments")
 
 # ── Worker ────────────────────────────────────────────────────────────
 
-def run_single(network: str, prior: str, n_samples: int, seed: int) -> tuple:
+def run_single(network: str, prior: str, n_samples: int, seed: int,
+              out_dir: str) -> tuple:
     """运行一次 MOEA/D 实验。返回 (network, prior, n_samples, seed, status)。"""
     output_dir = os.path.join(
-        OUT_DIR, f"{network}_{prior}_N{n_samples}", f"run_{seed}",
+        out_dir, f"{network}_{prior}_N{n_samples}", f"run_{seed}",
     )
     result_pkl = os.path.join(output_dir, "result.pkl")
 
@@ -87,12 +88,12 @@ def run_single(network: str, prior: str, n_samples: int, seed: int) -> tuple:
 
 # ── 汇总 ─────────────────────────────────────────────────────────────
 
-def generate_summary(networks, priors, sample_sizes, seeds):
+def generate_summary(networks, priors, sample_sizes, seeds, out_dir):
     """读取所有运行结果，汇总到 summary.csv。
 
     每行 = 一次运行中 F1_skel 最高的 Pareto 解。
     """
-    summary_path = os.path.join(OUT_DIR, "summary.csv")
+    summary_path = os.path.join(out_dir, "summary.csv")
     fieldnames = [
         "network", "prior", "n_samples", "seed",
         "n_pareto", "edges", "mdl", "sdiff",
@@ -106,7 +107,7 @@ def generate_summary(networks, priors, sample_sizes, seeds):
             for n_samples in sample_sizes:
                 for seed in seeds:
                     run_dir = os.path.join(
-                        OUT_DIR, f"{network}_{prior}_N{n_samples}", f"run_{seed}",
+                        out_dir, f"{network}_{prior}_N{n_samples}", f"run_{seed}",
                     )
                     row = _extract_run_metrics(
                         network, prior, n_samples, seed, run_dir,
@@ -197,6 +198,10 @@ def main():
         help=f"逗号分隔，默认: 42..71 (30 seeds)",
     )
     parser.add_argument(
+        "--output", type=str, default=None,
+        help="输出目录 (默认: output/experiments)",
+    )
+    parser.add_argument(
         "--workers", type=int, default=os.cpu_count(),
         help=f"并行 worker 数，默认: CPU 核心数 ({os.cpu_count()})",
     )
@@ -206,13 +211,15 @@ def main():
     )
     args = parser.parse_args()
 
+    out_dir = args.output if args.output else OUT_DIR
+
     networks = args.networks.split(",") if args.networks else NETWORKS
     priors = args.priors.split(",") if args.priors else PRIORS
     samples = [int(s) for s in args.samples.split(",")] if args.samples else SAMPLE_SIZES
     seeds = [int(s) for s in args.seeds.split(",")] if args.seeds else SEEDS
 
     if args.summary_only:
-        generate_summary(networks, priors, samples, seeds)
+        generate_summary(networks, priors, samples, seeds, out_dir)
         return
 
     # ── 构建任务列表（跳过已完成） ────────────────────────
@@ -223,7 +230,7 @@ def main():
             for n in samples:
                 for seed in seeds:
                     run_dir = os.path.join(
-                        OUT_DIR, f"{net}_{prior}_N{n}", f"run_{seed}",
+                        out_dir, f"{net}_{prior}_N{n}", f"run_{seed}",
                     )
                     if os.path.exists(os.path.join(run_dir, "result.pkl")):
                         skipped += 1
@@ -241,22 +248,22 @@ def main():
     if skipped:
         print(f"  已完成: {skipped}, 待运行: {len(tasks)}")
     print(f"  workers: {args.workers}")
-    print(f"  输出: {OUT_DIR}")
+    print(f"  输出: {out_dir}")
     print("=" * 60)
 
     if not tasks:
         print("\n全部已完成，直接生成汇总。")
-        generate_summary(networks, priors, samples, seeds)
+        generate_summary(networks, priors, samples, seeds, out_dir)
         return
 
     # ── 运行 ──────────────────────────────────────────────
-    os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
     done = skipped
     failed = 0
     t0 = time.time()
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {executor.submit(run_single, *t): t for t in tasks}
+        futures = {executor.submit(run_single, *t, out_dir): t for t in tasks}
 
         for future in as_completed(futures):
             net, prior, n, seed = futures[future]
@@ -279,7 +286,7 @@ def main():
           f" ({failed} 失败, {elapsed:.0f}s)")
 
     # ── 汇总 ──────────────────────────────────────────────
-    generate_summary(networks, priors, samples, seeds)
+    generate_summary(networks, priors, samples, seeds, out_dir)
 
 
 if __name__ == "__main__":
