@@ -159,6 +159,7 @@ def profiled_run(self):
         population=self.population,
         population_f=self.F,
         history=history,
+        sdiff_history=[],
         ideal=self.ideal,
         config=config,
         node_names=self.node_names,
