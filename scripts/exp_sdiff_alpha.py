@@ -18,6 +18,7 @@ import sys
 import time
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from itertools import product
 
 import matplotlib
 matplotlib.use("Agg")
@@ -84,19 +85,16 @@ def _best_row(pareto_csv):
 def generate_summary(out_dir):
     os.makedirs(out_dir, exist_ok=True)
     rows = []
-    for prior in PRIORS:
-        for alpha in ALPHAS:
-            for seed in SEEDS:
-                run_dir = os.path.join(out_dir, f"{NETWORK}_{prior}_a{alpha}",
-                                       f"run_{seed}")
-                best = _best_row(os.path.join(run_dir, "pareto_front.csv"))
-                if best is None:
-                    continue
-                rows.append({
-                    "prior": prior, "alpha": alpha, "seed": seed,
-                    "f1_skel": best["f1_skel"], "shd_skel": best["shd_skel"],
-                    "sdiff": best["sdiff"],
-                })
+    for prior, alpha, seed in product(PRIORS, ALPHAS, SEEDS):
+        run_dir = os.path.join(out_dir, f"{NETWORK}_{prior}_a{alpha}", f"run_{seed}")
+        best = _best_row(os.path.join(run_dir, "pareto_front.csv"))
+        if best is None:
+            continue
+        rows.append({
+            "prior": prior, "alpha": alpha, "seed": seed,
+            "f1_skel": best["f1_skel"], "shd_skel": best["shd_skel"],
+            "sdiff": best["sdiff"],
+        })
     summary_path = os.path.join(out_dir, "summary.csv")
     with open(summary_path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["prior", "alpha", "seed",
@@ -152,8 +150,7 @@ def main():
         generate_summary(out_dir)
         return
 
-    tasks = [(prior, alpha, seed)
-             for prior in PRIORS for alpha in ALPHAS for seed in SEEDS]
+    tasks = list(product(PRIORS, ALPHAS, SEEDS))
     os.makedirs(out_dir, exist_ok=True)
     print(f"实验: {NETWORK} × {len(PRIORS)}先验 × {len(ALPHAS)}α × {len(SEEDS)}seed "
           f"= {len(tasks)} 次")

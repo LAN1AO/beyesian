@@ -405,7 +405,8 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
         cmd.append("--plot-networks")
     if args.track_sdiff:
         cmd.append("--track-sdiff")
-    cmd.extend(["--sdiff-alpha", str(args.sdiff_alpha)])
+    if args.sdiff_alpha != 1.0:
+        cmd.extend(["--sdiff-alpha", str(args.sdiff_alpha)])
     if args.max_parents is not None:
         cmd.append("--max-parents")
         cmd.append(str(args.max_parents))

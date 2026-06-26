@@ -95,6 +95,11 @@ class MOEAD:
         self.pop_size = len(self.weights)
         self.neighbors = compute_neighborhood(self.weights, config.n_neighbors)
 
+        # 聚合用权重：sdiff 维(索引1)按先验置信度 α 缩放(α<1 削弱先验牵引)，
+        # 邻居计算仍用原始 Das-Dennis 权重。
+        self.agg_weights = self.weights.copy()
+        self.agg_weights[:, 1] *= config.sdiff_alpha
+
         # 生成初始种群
         self.population = generate_initial_population(
             prior_graph, self.sdiff_score, config,
@@ -168,7 +173,7 @@ class MOEAD:
                     self.population[l],
                     self.mdl_score,
                     self.sdiff_score,
-                    self.weights[i],
+                    self.agg_weights[i],
                     self.ideal,
                     nadir,
                     config.eps,
@@ -177,7 +182,6 @@ class MOEAD:
                     parent2_scores=self.node_scores[l],
                     score_cache=self._score_cache,
                     crossover_type=config.crossover_type,
-                    sdiff_alpha=config.sdiff_alpha,
                 )
 
                 # 3. 变异
@@ -202,12 +206,10 @@ class MOEAD:
                     if n_replaced >= config.max_replacements:
                         break
                     g_child = chebyshev_aggregate(
-                        child_f, self.weights[j], self.ideal, nadir, config.eps,
-                        sdiff_alpha=config.sdiff_alpha,
+                        child_f, self.agg_weights[j], self.ideal, nadir, config.eps
                     )
                     g_curr = chebyshev_aggregate(
-                        self.F[j], self.weights[j], self.ideal, nadir, config.eps,
-                        sdiff_alpha=config.sdiff_alpha,
+                        self.F[j], self.agg_weights[j], self.ideal, nadir, config.eps
                     )
                     if g_child <= g_curr:
                         self.population[j] = child.copy()

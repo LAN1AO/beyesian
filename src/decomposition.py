@@ -45,7 +45,6 @@ def chebyshev_aggregate(
     ideal: np.ndarray,
     nadir: np.ndarray | None = None,
     eps: float = 1e-8,
-    sdiff_alpha: float = 1.0,
 ) -> float:
     """归一化切比雪夫聚合函数。
 
@@ -67,9 +66,7 @@ def chebyshev_aggregate(
     if nadir is not None:
         range_ = np.maximum(nadir - ideal, eps)
         diff = diff / range_
-    scaled = weight * diff
-    scaled[1] *= sdiff_alpha
-    return float(np.max(scaled))
+    return float(np.max(weight * diff))
 
 
 def compute_neighborhood(weights: np.ndarray, n_neighbors: int) -> np.ndarray:
