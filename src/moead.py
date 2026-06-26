@@ -177,6 +177,7 @@ class MOEAD:
                     parent2_scores=self.node_scores[l],
                     score_cache=self._score_cache,
                     crossover_type=config.crossover_type,
+                    sdiff_alpha=config.sdiff_alpha,
                 )
 
                 # 3. 变异
@@ -201,10 +202,12 @@ class MOEAD:
                     if n_replaced >= config.max_replacements:
                         break
                     g_child = chebyshev_aggregate(
-                        child_f, self.weights[j], self.ideal, nadir, config.eps
+                        child_f, self.weights[j], self.ideal, nadir, config.eps,
+                        sdiff_alpha=config.sdiff_alpha,
                     )
                     g_curr = chebyshev_aggregate(
-                        self.F[j], self.weights[j], self.ideal, nadir, config.eps
+                        self.F[j], self.weights[j], self.ideal, nadir, config.eps,
+                        sdiff_alpha=config.sdiff_alpha,
                     )
                     if g_child <= g_curr:
                         self.population[j] = child.copy()

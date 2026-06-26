@@ -49,6 +49,9 @@ class MOEADConfig:
     # --- Sdiff 收敛追踪 ---
     track_sdiff: bool = False  # 每代记录 max/mean sdiff 并画图
 
+    # --- sdiff 项缩放（先验置信度，<1 削弱先验牵引）---
+    sdiff_alpha: float = 1.0
+
     def __post_init__(self):
         if self.data is not None:
             m, n = self.data.shape

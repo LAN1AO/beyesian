@@ -39,6 +39,7 @@ def crossover(
     parent2_scores: dict[int, tuple[float, float]] | None = None,
     score_cache: dict | None = None,
     crossover_type: str = "sequential",
+    sdiff_alpha: float = 1.0,
 ) -> DirectedGraph:
     """逐节点父集重组交叉算子，支持两种模式。
 
@@ -111,8 +112,12 @@ def crossover(
             # 归一化切比雪夫聚合: g = max_i { λ_i * |f_i - z*_i| / range_i }
             f1 = np.array([mdl1, sd1])
             f2 = np.array([mdl2, sd2])
-            g1 = np.max(weight * np.abs(f1 - ideal) / range_)
-            g2 = np.max(weight * np.abs(f2 - ideal) / range_)
+            s1 = weight * np.abs(f1 - ideal) / range_
+            s1[1] *= sdiff_alpha
+            g1 = np.max(s1)
+            s2 = weight * np.abs(f2 - ideal) / range_
+            s2[1] *= sdiff_alpha
+            g2 = np.max(s2)
 
             selected = p1_parents if g1 <= g2 else p2_parents
 

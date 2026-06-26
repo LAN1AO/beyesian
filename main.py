@@ -136,6 +136,10 @@ def main():
         "--track-sdiff", action="store_true",
         help="每代记录 max/mean sdiff 并画收敛曲线图",
     )
+    parser.add_argument(
+        "--sdiff-alpha", type=float, default=1.0,
+        help="sdiff 项缩放系数 (先验置信度，<1 削弱先验牵引；默认 1.0)",
+    )
 
     # Batch 模式
     parser.add_argument(
@@ -224,6 +228,7 @@ def _run_single(args):
         mutation_ops_min=args.mutation_ops_min,
         mutation_ops_max=args.mutation_ops_max,
         track_sdiff=args.track_sdiff,
+        sdiff_alpha=args.sdiff_alpha,
         data=data,
         output_dir=args.output,
         random_seed=args.seed,
@@ -337,6 +342,7 @@ def _run_single(args):
             "mutation_prob": args.mutation_prob,
             "mutation_ops_min": args.mutation_ops_min,
             "mutation_ops_max": args.mutation_ops_max,
+            "sdiff_alpha": args.sdiff_alpha,
             "max_sdiff": max_sdiff,
             "max_parents": args.max_parents,
             "mdl_penalty": args.mdl_penalty,
@@ -399,6 +405,7 @@ def _batch_worker(seed: int, output_dir: str, prior_file: str,
         cmd.append("--plot-networks")
     if args.track_sdiff:
         cmd.append("--track-sdiff")
+    cmd.extend(["--sdiff-alpha", str(args.sdiff_alpha)])
     if args.max_parents is not None:
         cmd.append("--max-parents")
         cmd.append(str(args.max_parents))
@@ -500,6 +507,7 @@ def _run_batch(args):
         "mutation_prob": args.mutation_prob,
         "mutation_ops_min": args.mutation_ops_min,
         "mutation_ops_max": args.mutation_ops_max,
+        "sdiff_alpha": args.sdiff_alpha,
         "max_sdiff": args.max_sdiff,
         "max_parents": args.max_parents,
         "mdl_penalty": args.mdl_penalty,
