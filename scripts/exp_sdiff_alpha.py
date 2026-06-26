@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """sdiff_alpha 先验置信度对照实验。
 
-矩阵: alarm × 5 先验(gt/mild/moderate/severe/random) × α{1.0,0.5,0.25,0.1} × 3 seed = 60 次。
+矩阵: alarm × 5 先验(gt/mild/moderate/severe/random) × α{1.0,0.5,0.25,0.1,0.05,0.01} × 3 seed = 90 次。
 验证 α(sdiff 项缩放)作为"先验置信度旋钮": α↓ 削弱先验牵引。
 预测: gt 先验 F1 随 α↓ 下降; random/severe 随 α↓ 上升(数据压过坏先验)。
 
@@ -32,7 +32,7 @@ OUT_DIR = os.path.join(ROOT, "output", "exp_sdiff_alpha")
 
 NETWORK = "alarm"
 PRIORS = ["gt", "mild", "moderate", "severe", "random"]
-ALPHAS = [1.0, 0.5, 0.25, 0.1]
+ALPHAS = [1.0, 0.5, 0.25, 0.1, 0.05, 0.01]
 SEEDS = [42, 43, 44]
 N_SAMPLES = 1000
 POP_SIZE = 100
