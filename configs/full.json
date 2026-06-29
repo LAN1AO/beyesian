@@ -1,0 +1,20 @@
+{
+  "output": "output/experiments",
+  "networks": ["asia", "alarm", "hailfinder", "win95pts", "munin1", "andes"],
+  "priors": ["gt", "mild", "moderate", "severe", "random"],
+  "alphas": [1.0],
+  "n_samples": [500, 1000, 5000, 10000],
+  "seeds": [42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
+            58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71],
+  "params": {
+    "pop_size": 100,
+    "max_parents": 6,
+    "generations": 10000
+  },
+  "per_network": {
+    "asia": {"max_parents": 4},
+    "win95pts": {"pop_size": 200, "max_parents": 8},
+    "munin1": {"pop_size": 200, "max_parents": 8},
+    "andes": {"pop_size": 200, "max_parents": 8}
+  }
+}

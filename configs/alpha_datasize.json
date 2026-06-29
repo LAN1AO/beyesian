@@ -1,0 +1,13 @@
+{
+  "output": "output/exp_alpha_datasize",
+  "networks": ["alarm"],
+  "priors": ["random", "severe", "gt"],
+  "alphas": [1.0, 0.25, 0.05],
+  "n_samples": [500, 1000, 5000, 10000],
+  "seeds": [42, 43, 44],
+  "params": {
+    "pop_size": 100,
+    "max_parents": 6,
+    "generations": 5000
+  }
+}
