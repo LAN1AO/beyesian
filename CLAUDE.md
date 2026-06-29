@@ -21,6 +21,10 @@ python3 main.py --model alarm --batch 30 --workers 8 \
     --pop-size 100 --generations 10000 --n-samples 5000 \
     --max-sdiff 50 --max-parents 4 --output ./output/batch_alarm
 
+# 批量实验矩阵 (配置驱动的通用实验台, 见下方"实验编排"节)
+python3 scripts/run_experiment.py configs/alpha_knob.json                # 全量(断点续跑)+汇总 summary.csv
+python3 scripts/run_experiment.py configs/alpha_knob.json --summary-only # 仅重新汇总已有结果
+
 # Profiling 交叉算子性能
 python3 -m cProfile -s cumulative profile_crossover.py 2>&1 | head -80
 ```
@@ -59,6 +63,7 @@ main.py ──→ CLI 入口，组装 prior + moead + visualize
 - 2 目标 Das-Dennis: H 分区 → H+1 个权重向量
 - 归一化: `g = max_i { λ_i * |f_i - z*_i| / max(nadir_i - ideal_i, ε) }`
 - ideal 和 nadir 每代从种群动态更新
+- **先验置信度 α** (`sdiff_alpha`, CLI `--sdiff-alpha`): `moead.py:100-101` 构造 `agg_weights = weights.copy(); agg_weights[:,1] *= α` 缩放 sdiff 维权重，α<1 削弱先验牵引、1.0=现状。子问题聚合走 `agg_weights`，但邻居 `compute_neighborhood` 仍用**原始** `weights`(α 不改邻居结构)。机制与实测见 `prior-pull-analysis.md`
 
 ### 遗传算子 (`operators.py`)
 - **交叉**: **子问题感知交叉**。逐节点用归一化切比雪夫聚合（嵌入当前子问题的 λ）比较两父代父集，选更优者组装。从空图构建，即时判环。这是核心创新——同一对父代，不同子问题产生不同子代
@@ -77,6 +82,14 @@ main.py ──→ CLI 入口，组装 prior + moead + visualize
 - bnlearn 模型: 加载原始图 → 随机变异 6 次作为先验（避免标准答案）
 - BIF 文件: 直接使用，不做变异
 - `generate_data()` 从 pgmpy 模型采样合成数据
+
+### 实验编排 (`scripts/` + `configs/`)
+- **数据预生成**: `scripts/prepare_data.py` 一次性生成 `data/{priors,synthetic,ground_truth}/`（先验 .pkl / 合成数据 .npy / 真图 .pkl）。所有实验假设这些文件已存在，缺失则 `main.py` 报错
+- **通用实验台** `scripts/run_experiment.py`: **配置文件驱动**（JSON），对矩阵 `networks × priors × alphas × n_samples × seeds` 的笛卡尔积逐 cell 调 `main.py`（固定带 `--no-plot --no-params`），`ThreadPoolExecutor` 并行；汇总每 cell 的 **best-F1_skel 行** → `{output}/summary.csv`。命令行不接收任何实验参数
+  - 配置三要素: 矩阵五维（列表，单值=固定该维） + `params`（透传 main.py 超参默认） + `per_network`（按网络覆盖 `params`，规模不同的网络用不同 pop_size/max_parents）
+  - 输出目录 `{output}/{net}_{prior}_a{alpha}_N{n}/run_{seed}/`；**断点续跑**: 该目录 `result.pkl` 存在则跳过
+  - 样例配置 `configs/`: `alpha_knob`（α 置信度旋钮） / `alpha_datasize`（数据量×α 交互） / `full`（6 网络全量主实验）。新实验只写新 JSON、不写脚本
+- **baseline 对照** `scripts/run_baselines.py`: 调 R bnlearn (HC/Tabu/MMHC/PC/IAMB) → `output/baselines/results.csv`
 
 ## 重要实验结论
 
