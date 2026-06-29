@@ -73,6 +73,7 @@ python3 main.py \
 | `--max-parents` | 无限制 | 每个节点最大父节点数 |
 | `--max-sdiff` | 自动计算 | 结构对称差总和上限 (默认: n_known×K+E_prior，K=max_parents 或 n-1) |
 | `--mdl-penalty` | `1.0` | MDL 惩罚项缩放 (1.0=标准BIC，越小惩罚越轻) |
+| `--sdiff-alpha` | `1.0` | sdiff 项缩放 (先验置信度)，<1 削弱先验牵引，1.0=不缩放 |
 
 ### Batch 模式
 | 参数 | 默认值 | 说明 |
@@ -140,6 +141,49 @@ python3 main.py \
     --pop-size 100 --generations 10000 --max-parents 4 \
     --output ./output/batch_alarm
 ```
+
+## 批量实验矩阵 (实验台)
+
+`scripts/run_experiment.py` 是配置文件驱动的通用实验台：对一个超参矩阵 `networks × priors × alphas × n_samples × seeds` 逐 cell 调用 `main.py`，断点续跑（cell 的 `result.pkl` 已存在则跳过），最后汇总每 cell 的 best-F1_skel 行成 `summary.csv`。所有实验维度与超参均来自一个 JSON 配置文件，命令行不接收实验参数。数据需先由 `scripts/prepare_data.py` 预生成。
+
+```bash
+python scripts/run_experiment.py configs/alpha_knob.json                # 全量(断点续跑)+ 汇总
+python scripts/run_experiment.py configs/alpha_knob.json --summary-only # 仅汇总已有结果
+```
+
+配置文件格式 (JSON)：
+
+```json
+{
+  "output": "output/exp_alpha",
+  "workers": 8,
+  "networks": ["alarm"],
+  "priors": ["gt", "mild", "moderate", "severe", "random"],
+  "alphas": [1.0, 0.5, 0.25, 0.1, 0.05, 0.01],
+  "n_samples": [1000],
+  "seeds": [42, 43, 44],
+  "params": { "pop_size": 100, "max_parents": 6, "generations": 3000 },
+  "per_network": { "andes": { "pop_size": 200, "max_parents": 8 } }
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `networks/priors/alphas/n_samples/seeds` | 矩阵五维（列表），笛卡尔积 = 全部实验 cell；单值列表即固定该维 |
+| `alphas` | 透传 `--sdiff-alpha`（先验置信度，<1 削弱先验牵引） |
+| `params` | 透传 `main.py` 的全局超参默认（`pop_size/max_parents/generations/neighbors/…`） |
+| `per_network` | 可选，按网络覆盖部分 `params`（规模不同的网络用不同 `pop_size/max_parents`） |
+| `output` / `workers` | 输出目录（必填）/ 并行数（默认 CPU 核心数） |
+
+输出目录为 `{output}/{net}_{prior}_a{alpha}_N{n}/run_{seed}/`，汇总写入 `{output}/summary.csv`（列：`network,prior,alpha,n_samples,seed,n_pareto,edges,mdl,sdiff,shd,f1,shd_skel,f1_skel`）。完整字段约定见脚本 docstring。
+
+开箱即用的样例配置（`configs/`）：
+
+| 配置 | 实验矩阵 |
+|------|----------|
+| `alpha_knob.json` | alarm × 5 先验 × 6 档 α × N1000 × 3 seed —— α 作为先验置信度旋钮 |
+| `alpha_datasize.json` | alarm × {random,severe,gt} × α{1.0,0.25,0.05} × N{500…10000} × 3 seed —— 数据量×α 交互 |
+| `full.json` | 6 网络 × 5 先验 × α1.0 × N{500…10000} × 30 seed —— 全量主实验 |
 
 ## 输出文件
 
