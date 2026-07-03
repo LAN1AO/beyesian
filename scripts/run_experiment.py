@@ -56,18 +56,41 @@ PARAM_FLAGS = {
 }
 BOOL_FLAGS = {"track_sdiff": "--track-sdiff"}
 
-SUMMARY_FIELDS = ["network", "prior", "alpha", "n_samples", "seed", "n_pareto",
+SUMMARY_FIELDS = ["network", "prior", "alpha", "n_samples", "noise_level",
+                  "seed", "n_pareto",
                   "edges", "mdl", "sdiff", "shd", "f1", "shd_skel", "f1_skel"]
 
 
 def _cells(cfg):
-    return list(product(cfg["networks"], cfg["priors"], cfg["alphas"],
-                        cfg["n_samples"], cfg["seeds"]))
+    dims = [cfg["networks"], cfg["priors"], cfg["alphas"],
+            cfg["n_samples"], cfg["seeds"]]
+    noise_levels = cfg.get("noise_levels", [])
+    if noise_levels:
+        dims.append(noise_levels)
+    else:
+        dims.append([0])  # 哨兵: 无噪声=干净数据
+    return list(product(*dims))
 
 
-def _run_dir(cfg, net, prior, alpha, n, seed):
-    return os.path.join(cfg["output"], f"{net}_{prior}_a{alpha}_N{n}",
-                        f"run_{seed}")
+def _run_dir(cfg, net, prior, alpha, n, seed, noise=0):
+    base = f"{net}_{prior}_a{alpha}_N{n}"
+    if noise > 0:
+        base += f"_noise{_noise_label(noise)}"
+    return os.path.join(cfg["output"], base, f"run_{seed}")
+
+
+def _noise_label(level: float) -> str:
+    """0.05 → '0.05', 用于目录名。"""
+    return f"{level:.2f}".rstrip("0").rstrip(".")
+
+
+def _data_file(cfg, net, n, noise=0):
+    """构造数据文件路径。noise=0 用干净数据，>0 用加噪数据。"""
+    if noise > 0:
+        fname = f"{net}_N{n}_noise{_noise_label(noise)}.npy"
+    else:
+        fname = f"{net}_N{n}.npy"
+    return os.path.join(DATA_DIR, "synthetic", fname)
 
 
 def _params_for(cfg, net):
@@ -77,16 +100,16 @@ def _params_for(cfg, net):
     return p
 
 
-def run_single(cfg, net, prior, alpha, n, seed):
+def run_single(cfg, net, prior, alpha, n, seed, noise=0):
     """跑一次 MOEA/D。断点续跑: result.pkl 存在则跳过。"""
-    out = _run_dir(cfg, net, prior, alpha, n, seed)
+    out = _run_dir(cfg, net, prior, alpha, n, seed, noise)
     if os.path.exists(os.path.join(out, "result.pkl")):
-        return (net, prior, alpha, n, seed, "skipped")
+        return (net, prior, alpha, n, noise, seed, "skipped")
     os.makedirs(out, exist_ok=True)
     cmd = [
         sys.executable, MAIN_PY,
         "--prior-file", os.path.join(DATA_DIR, "priors", f"{net}_{prior}.pkl"),
-        "--data-file", os.path.join(DATA_DIR, "synthetic", f"{net}_N{n}.npy"),
+        "--data-file", _data_file(cfg, net, n, noise),
         "--ground-truth", os.path.join(DATA_DIR, "ground_truth", f"{net}_graph.pkl"),
         "--sdiff-alpha", str(alpha),
         "--seed", str(seed),
@@ -104,10 +127,10 @@ def run_single(cfg, net, prior, alpha, n, seed):
     try:
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL,
                        stderr=subprocess.PIPE)
-        return (net, prior, alpha, n, seed, "ok")
+        return (net, prior, alpha, n, noise, seed, "ok")
     except subprocess.CalledProcessError as e:
         msg = e.stderr.decode().strip().split("\n")[-1] if e.stderr else str(e.returncode)
-        return (net, prior, alpha, n, seed, f"error: {msg}")
+        return (net, prior, alpha, n, noise, seed, f"error: {msg}")
 
 
 def _best_row(pareto_csv):
@@ -127,14 +150,15 @@ def _best_row(pareto_csv):
 
 def generate_summary(cfg):
     rows = []
-    for net, prior, alpha, n, seed in _cells(cfg):
-        out = _run_dir(cfg, net, prior, alpha, n, seed)
+    for net, prior, alpha, n, seed, noise in _cells(cfg):
+        out = _run_dir(cfg, net, prior, alpha, n, seed, noise)
         best, n_pareto = _best_row(os.path.join(out, "pareto_front.csv"))
         if best is None:
             continue
         rows.append({
             "network": net, "prior": prior, "alpha": alpha,
-            "n_samples": n, "seed": seed, "n_pareto": n_pareto,
+            "n_samples": n, "noise_level": noise, "seed": seed,
+            "n_pareto": n_pareto,
             "edges": best["edges"], "mdl": best["mdl"], "sdiff": best["sdiff"],
             "shd": best["shd"], "f1": best["f1"],
             "shd_skel": best["shd_skel"], "f1_skel": best["f1_skel"],
@@ -163,10 +187,13 @@ def main():
         return
 
     cells = _cells(cfg)
+    noise_levels = cfg.get("noise_levels", [])
     os.makedirs(cfg["output"], exist_ok=True)
-    print(f"实验: {len(cfg['networks'])}网络 × {len(cfg['priors'])}先验 × "
-          f"{len(cfg['alphas'])}α × {len(cfg['n_samples'])}N × "
-          f"{len(cfg['seeds'])}seed = {len(cells)} 次")
+    dims = (f"{len(cfg['networks'])}网络 × {len(cfg['priors'])}先验 × "
+            f"{len(cfg['alphas'])}α × {len(cfg['n_samples'])}N")
+    if noise_levels:
+        dims += f" × {len(noise_levels)}噪声"
+    print(f"实验: {dims} × {len(cfg['seeds'])}seed = {len(cells)} 次")
     print(f"  workers={cfg['workers']}, 输出={cfg['output']}")
 
     done = failed = 0
@@ -174,12 +201,13 @@ def main():
     with ThreadPoolExecutor(max_workers=cfg["workers"]) as ex:
         futs = {ex.submit(run_single, cfg, *c): c for c in cells}
         for fut in as_completed(futs):
-            net, prior, alpha, n, seed, status = fut.result()
+            net, prior, alpha, n, noise, seed, status = fut.result()
             done += 1
             if "error" in status:
                 failed += 1
+                noise_str = f" noise{_noise_label(noise)}" if noise > 0 else ""
                 print(f"  [{done}/{len(cells)}] FAIL {net} {prior} a{alpha} "
-                      f"N{n} s{seed}: {status}", file=sys.stderr)
+                      f"N{n}{noise_str} s{seed}: {status}", file=sys.stderr)
             elif done % 10 == 0 or done == len(cells):
                 print(f"  [{done}/{len(cells)}] {failed} 失败, {time.time()-t0:.0f}s")
     print(f"完成: {done-failed}/{len(cells)} ok, {failed} 失败, {time.time()-t0:.0f}s")

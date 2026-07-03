@@ -27,6 +27,7 @@ from src.prior import PriorNetwork
 
 NETWORKS = ["asia", "alarm", "hailfinder", "win95pts", "munin1", "andes"]
 SAMPLE_SIZES = [500, 1000, 5000, 10000]
+NOISE_LEVELS = [0.05, 0.1, 0.2]  # 对称标签噪声概率
 PERTURBATION_LEVELS = {"mild": 0.10, "moderate": 0.25, "severe": 0.50}
 MAX_PARENTS = {
     "asia": 4,
@@ -104,6 +105,62 @@ def generate_synthetic_data(network: str, n_samples: int):
     return data
 
 
+def generate_noisy_data(network: str, n_samples: int, noise_level: float):
+    """对已有合成数据施加对称标签噪声。
+
+    以概率 noise_level 将每个单元格替换为该节点取值范围内的随机值。
+    噪声后的数据存入 data/synthetic/{net}_N{n}_noise{p}.npy。
+    """
+    out_dir = os.path.join(DATA_DIR, "synthetic")
+    clean_path = os.path.join(out_dir, f"{network}_N{n_samples}.npy")
+    if not os.path.exists(clean_path):
+        print(f"  [NOISY] 跳过 {network} N={n_samples}: 干净数据不存在")
+        return
+
+    meta_path = os.path.join(out_dir, f"{network}_N{n_samples}.json")
+    with open(meta_path) as f:
+        meta = json.load(f)
+    n_states = meta["n_states"]
+
+    rng = np.random.default_rng(SEED_DATA)
+    data = np.load(clean_path).astype(np.int32)
+    n_rows, n_cols = data.shape
+
+    # 对每个节点独立施加噪声
+    for j in range(n_cols):
+        k = n_states[j]
+        if k <= 1:
+            continue  # 单状态节点无法加噪
+        mask = rng.random(n_rows) < noise_level
+        n_flipped = int(np.sum(mask))
+        if n_flipped == 0:
+            continue
+        # 翻转到不同状态: 加 [1, k-1] 的随机偏移后取模
+        current = data[mask, j]
+        offsets = rng.integers(1, k, size=n_flipped)
+        data[mask, j] = (current + offsets) % k
+
+    # 保存加噪数据
+    noise_tag = _noise_tag(noise_level)
+    npy_path = os.path.join(out_dir, f"{network}_N{n_samples}_{noise_tag}.npy")
+    np.save(npy_path, data)
+
+    # 保存元信息
+    noisy_meta = dict(meta, noise_level=noise_level, noise_type="symmetric_label")
+    noisy_meta_path = os.path.join(out_dir, f"{network}_N{n_samples}_{noise_tag}.json")
+    with open(noisy_meta_path, "w") as f:
+        json.dump(noisy_meta, f, indent=2, ensure_ascii=False)
+
+    print(f"  [NOISY] {network} N={n_samples} noise={noise_level}: → {npy_path}")
+    return data
+
+
+def _noise_tag(level: float) -> str:
+    """噪声级别 → 文件名标签 (0.05 → 'noise0.05')。"""
+    s = f"{level:.2f}".rstrip("0").rstrip(".")
+    return f"noise{s}"
+
+
 # ── 先验网络 ──────────────────────────────────────────────────────────
 
 def save_prior(network: str, prior_data: dict, suffix: str):
@@ -138,15 +195,25 @@ def main():
         default=None,
         help=f"逗号分隔的样本量，默认: {','.join(map(str, SAMPLE_SIZES))}",
     )
+    parser.add_argument(
+        "--noise-levels",
+        type=str,
+        default=None,
+        help=f"逗号分隔的噪声概率，默认不生成 (可选如: 0.05,0.1,0.2)",
+    )
     args = parser.parse_args()
 
     networks = args.networks.split(",") if args.networks else NETWORKS
     samples = [int(s) for s in args.samples.split(",")] if args.samples else SAMPLE_SIZES
+    noise_levels = ([float(x) for x in args.noise_levels.split(",")]
+                    if args.noise_levels else [])
 
     print("=" * 60)
     print("准备实验数据集")
     print(f"  网络: {networks}")
     print(f"  样本量: {samples}")
+    if noise_levels:
+        print(f"  噪声级别: {noise_levels}")
     print(f"  扰动级别: {list(PERTURBATION_LEVELS.keys())} + random")
     print(f"  数据 seed: {SEED_DATA}, 扰动 seed: {SEED_PERTURB}")
     print("=" * 60)
@@ -160,6 +227,8 @@ def main():
         # 2. 合成数据
         for n in samples:
             generate_synthetic_data(network, n)
+            for noise_p in noise_levels:
+                generate_noisy_data(network, n, noise_p)
 
         # 3. 先验网络
         n_nodes = len(node_names)
